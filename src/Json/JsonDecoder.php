@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Json;
 
+use Rondeto\JSContact\Conversion\IssueCollector;
 use Rondeto\JSContact\Conversion\Result;
-use Rondeto\JSContact\Conversion\WarningCollector;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Author;
@@ -19,21 +19,26 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Validation\CardValidator;
+use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\Validation\Registry;
 
 /**
  * Reads a JSContact Card from JSON (RFC 9553, as updated by RFC 9982).
  *
- * Reading is lenient: a value that breaks the specification is skipped or corrected, and
- * reported as a warning. The remaining rule violations (see CardValidator) are reported
- * as warnings too, but the values are kept: JsonEncoder refuses such a Card unless its
- * validation is turned off.
+ * Reading is lenient by default: a value that breaks the specification is skipped or
+ * corrected, and reported as an issue. The other broken rules (see CardValidator) are
+ * reported as issues too, but the values are kept: JsonEncoder refuses such a Card unless
+ * its validation is turned off.
+ *
+ * With strict: true, any issue makes reading fail instead, as RFC 9553 (section 1.7.2)
+ * requires from implementations that must reject invalid data.
  */
 final readonly class JsonDecoder
 {
     private const array SUPPORTED_MAJOR_VERSIONS = ['1', '2'];
 
     public function __construct(
+        private bool $strict = false,
         private CardValidator $validator = new CardValidator(),
     ) {
     }
@@ -41,7 +46,8 @@ final readonly class JsonDecoder
     /**
      * @return Result<Card>
      *
-     * @throws DecodingException when the input is not JSON, or not a Card object
+     * @throws DecodingException    when the input is not JSON, or not a Card object
+     * @throws InvalidCardException in strict mode, when the Card has any issue
      */
     public function decode(string $json): Result
     {
@@ -55,8 +61,8 @@ final readonly class JsonDecoder
             throw new DecodingException('The input is not a JSON object.');
         }
 
-        $warnings = new WarningCollector();
-        $object = new JsonObject($data, '', $warnings);
+        $issues = new IssueCollector();
+        $object = new JsonObject($data, '', $issues);
 
         if (!$object->has('@type')) {
             $object->warn('@type', 'missing mandatory property, read the object as a Card');
@@ -66,11 +72,12 @@ final readonly class JsonDecoder
 
         $card = $this->card($object);
 
-        foreach ($this->validator->validate($card) as $violation) {
-            $warnings->add($violation->path, $violation->message);
+        $all = [...$issues->all(), ...$this->validator->validate($card)];
+        if ($this->strict && [] !== $all) {
+            throw new InvalidCardException($all);
         }
 
-        return new Result($card, $warnings->all());
+        return new Result($card, $all);
     }
 
     private function card(JsonObject $object): Card

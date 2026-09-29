@@ -52,7 +52,7 @@ final class JsonEncoderTest extends TestCase
             new JsonEncoder()->encode(new Card(emails: ['e1' => new EmailAddress('a@example.com', pref: 0)]));
             self::fail('An invalid card was encoded.');
         } catch (InvalidCardException $e) {
-            self::assertSame(['/emails/e1/pref: must be between 1 and 100'], array_map(strval(...), $e->violations));
+            self::assertSame(['/emails/e1/pref: must be between 1 and 100'], array_map(strval(...), $e->issues));
         }
     }
 

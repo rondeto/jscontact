@@ -108,12 +108,12 @@ final class CardValidatorTest extends TestCase
      * @param list<string> $expected
      */
     #[DataProvider('invalidCards')]
-    public function testItReportsViolations(Card $card, array $expected): void
+    public function testItReportsIssues(Card $card, array $expected): void
     {
         self::assertSame($expected, array_map(strval(...), new CardValidator()->validate($card)));
     }
 
-    public function testAValidCardHasNoViolation(): void
+    public function testAValidCardHasNoIssue(): void
     {
         $card = new Card(
             uid: 'urn:uuid:1',

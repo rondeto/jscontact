@@ -19,7 +19,7 @@ use Rondeto\JSContact\Json\JsonEncoder;
 final class Rfc9553FiguresTest extends TestCase
 {
     /**
-     * Warnings a figure legitimately triggers, by figure number.
+     * Issues a figure legitimately triggers, by figure number.
      */
     private const array EXPECTED_WARNINGS = [
         // Figure 20 is a whole Card that omits the mandatory version property.
@@ -47,7 +47,7 @@ final class Rfc9553FiguresTest extends TestCase
 
         $result = new JsonDecoder()->decode(json_encode($card, \JSON_THROW_ON_ERROR));
 
-        self::assertSame(self::EXPECTED_WARNINGS[$number] ?? [], array_map(strval(...), $result->warnings));
+        self::assertSame(self::EXPECTED_WARNINGS[$number] ?? [], array_map(strval(...), $result->issues));
 
         // Compares the JSON values, whatever the order of object keys and the formatting.
         $card->version = JsonEncoder::VERSION;

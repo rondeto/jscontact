@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Json;
 
-use Rondeto\JSContact\Conversion\WarningCollector;
+use Rondeto\JSContact\Conversion\IssueCollector;
 use Rondeto\JSContact\Validation\Registry;
 use Rondeto\JSContact\Validation\Syntax;
 
 /**
  * Leniently reads the properties of one JSON object: a value of the wrong type is skipped
- * with a warning instead of failing the whole card.
+ * with an issue instead of failing the whole card.
  *
  * @internal
  */
@@ -22,7 +22,7 @@ final class JsonObject
     public function __construct(
         private readonly \stdClass $data,
         public readonly string $path,
-        private readonly WarningCollector $warnings,
+        private readonly IssueCollector $issues,
     ) {
     }
 
@@ -36,12 +36,12 @@ final class JsonObject
      */
     public function warn(?string $name, string $message): void
     {
-        $this->warnings->add(null === $name ? $this->path : $this->pathOf($name), $message);
+        $this->issues->add(null === $name ? $this->path : $this->pathOf($name), $message);
     }
 
     /**
      * Whether the object's @var, if set, is the expected one. A case variant is accepted
-     * with a warning.
+     * with an issue.
      */
     public function isOfType(string $expected): bool
     {
@@ -78,7 +78,7 @@ final class JsonObject
     }
 
     /**
-     * A string that must be set: returns null, with a warning, when it is missing.
+     * A string that must be set: returns null, with an issue, when it is missing.
      */
     public function requiredString(string $name): ?string
     {
@@ -137,7 +137,7 @@ final class JsonObject
     }
 
     /**
-     * An enumerated value. A case variant of a registered value is corrected with a warning.
+     * An enumerated value. A case variant of a registered value is corrected with an issue.
      *
      * @param list<string> $known
      */
@@ -224,7 +224,7 @@ final class JsonObject
             return null;
         }
 
-        return new self($value, $this->pathOf($name), $this->warnings);
+        return new self($value, $this->pathOf($name), $this->issues);
     }
 
     /**
@@ -246,7 +246,7 @@ final class JsonObject
         $list = [];
         foreach ($value as $index => $item) {
             if ($item instanceof \stdClass) {
-                $list[$index] = new self($item, $this->pathOf($name).'/'.$index, $this->warnings);
+                $list[$index] = new self($item, $this->pathOf($name).'/'.$index, $this->issues);
             } else {
                 $this->warn($name.'/'.$index, 'expected an object, ignored the entry');
             }
@@ -282,7 +282,7 @@ final class JsonObject
             } elseif (!$item instanceof \stdClass) {
                 $this->warn($itemPath, 'expected an object, ignored the entry');
             } else {
-                $map[$id] = new self($item, $this->pathOf($itemPath), $this->warnings);
+                $map[$id] = new self($item, $this->pathOf($itemPath), $this->issues);
             }
         }
 

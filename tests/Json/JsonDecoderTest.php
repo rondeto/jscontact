@@ -14,6 +14,7 @@ use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Validation\InvalidCardException;
 
 final class JsonDecoderTest extends TestCase
 {
@@ -40,28 +41,28 @@ final class JsonDecoderTest extends TestCase
         $result = $this->decode([]);
 
         self::assertEquals(new Card(), $result->value);
-        self::assertSame([], $result->warnings);
+        self::assertSame([], $result->issues);
     }
 
-    public function testAVersion1CardWithoutUidIsReadWithAWarning(): void
+    public function testAVersion1CardWithoutUidIsReadWithAnIssue(): void
     {
-        $this->assertWarnings(['/uid: missing mandatory property in a version 1.0 Card'], $this->decode(['version' => '1.0']));
+        $this->assertIssues(['/uid: missing mandatory property in a version 1.0 Card'], $this->decode(['version' => '1.0']));
     }
 
-    public function testAMissingTypeOrVersionIsReadWithAWarning(): void
+    public function testAMissingTypeOrVersionIsReadWithAnIssue(): void
     {
         $result = new JsonDecoder()->decode('{"prodId": "Test"}');
 
         self::assertSame('Test', $result->value->prodId);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/@type: missing mandatory property, read the object as a Card',
             '/version: missing mandatory property, read the Card as version 2.0',
         ], $result);
     }
 
-    public function testAnUnsupportedVersionIsReadWithAWarning(): void
+    public function testAnUnsupportedVersionIsReadWithAnIssue(): void
     {
-        $this->assertWarnings(['/version: unsupported version "3.0", read the Card as version 2.0'], $this->decode(['version' => '3.0']));
+        $this->assertIssues(['/version: unsupported version "3.0", read the Card as version 2.0'], $this->decode(['version' => '3.0']));
     }
 
     public function testValuesOfTheWrongTypeAreSkipped(): void
@@ -81,7 +82,7 @@ final class JsonDecoderTest extends TestCase
             'e2' => new EmailAddress('b@example.com', contexts: ['private']),
         ], $result->value->emails);
         self::assertEquals(new Name(components: [new NameComponent('given', 'Jane')]), $result->value->name);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/prodId: expected a string, ignored the value',
             '/name/components/1: expected an object, ignored the entry',
             '/name/isOrdered: expected a boolean, ignored the value',
@@ -101,7 +102,7 @@ final class JsonDecoderTest extends TestCase
 
         self::assertEquals(['p2' => new Phone('tel:+33612345678')], $result->value->phones);
         self::assertEquals(new Name(), $result->value->name);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/name/components/0/kind: missing mandatory property',
             '/name/components/0: ignored the component',
             '/name/components/1/value: missing mandatory property',
@@ -121,7 +122,7 @@ final class JsonDecoderTest extends TestCase
         ]]);
 
         self::assertEquals(['e2' => new EmailAddress('c@example.com')], $result->value->emails);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/emails/not valid!: not a valid Id, ignored the entry',
             '/emails/e1/@type: expected "EmailAddress", ignored the object',
             '/emails/e1: ignored the entry',
@@ -145,7 +146,7 @@ final class JsonDecoderTest extends TestCase
 
         self::assertSame('individual', $result->value->kind);
         self::assertEquals(['p1' => new Phone('tel:+1', features: ['voice'], contexts: ['work'])], $result->value->phones);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/kind: read "Individual" as "individual"',
             '/phones/p1/features/Voice: read "Voice" as "voice"',
             '/phones/p1/contexts/WORK: read "WORK" as "work"',
@@ -158,7 +159,7 @@ final class JsonDecoderTest extends TestCase
 
         self::assertSame('robot', $result->value->kind);
         self::assertSame(['hologram'], $result->value->phones['p1']->features ?? null);
-        self::assertSame([], $result->warnings);
+        self::assertSame([], $result->issues);
     }
 
     public function testDateTimesAreConvertedToUtc(): void
@@ -167,7 +168,7 @@ final class JsonDecoderTest extends TestCase
 
         self::assertEquals(new \DateTimeImmutable('2022-09-30T14:35:10.5Z'), $result->value->created);
         self::assertNull($result->value->updated);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/created: read "2022-09-30t16:35:10.500+02:00" as "2022-09-30T14:35:10.5Z"',
             '/updated: "yesterday" is not a date-time, ignored the value',
         ], $result);
@@ -188,7 +189,7 @@ final class JsonDecoderTest extends TestCase
             'organizations' => (object) ['o1' => (object) ['name' => 'ACME']],
         ], $result->value->extra);
         self::assertSame(['example.com:verified' => true], $result->value->emails['e1']->extra ?? null);
-        self::assertSame([], $result->warnings);
+        self::assertSame([], $result->issues);
     }
 
     public function testInvalidPropertyNamesAreDropped(): void
@@ -196,7 +197,7 @@ final class JsonDecoderTest extends TestCase
         $result = $this->decode(['Emails' => [], 'Organizations' => [], 'extra' => 1, 'not-a-name' => 1]);
 
         self::assertSame([], $result->value->extra);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/Emails: property names are case-sensitive, ignored the property',
             '/Organizations: property names are case-sensitive, ignored the property',
             '/extra: "extra" is a reserved property name, ignored the property',
@@ -210,10 +211,33 @@ final class JsonDecoderTest extends TestCase
 
         self::assertSame(['urn:uuid:1'], $result->value->members);
         self::assertSame('not an email', $result->value->emails['e1']->address ?? null);
-        $this->assertWarnings([
+        $this->assertIssues([
             '/members: members can only be set when kind is "group"',
             '/emails/e1/address: "not an email" is not an email address',
         ], $result);
+    }
+
+    public function testStrictModeRefusesACardWithAnyIssue(): void
+    {
+        $json = '{"@type": "Card", "version": "2.0", "kind": "Group", "emails": {"e1": {"address": "a@example.com", "pref": 0}}}';
+
+        try {
+            new JsonDecoder(strict: true)->decode($json);
+            self::fail('An invalid card was read in strict mode.');
+        } catch (InvalidCardException $e) {
+            self::assertSame([
+                '/kind: read "Group" as "group"',
+                '/emails/e1/pref: expected an integer from 1 to 100, ignored the value',
+            ], array_map(strval(...), $e->issues));
+        }
+    }
+
+    public function testStrictModeReadsAValidCard(): void
+    {
+        $result = new JsonDecoder(strict: true)->decode('{"@type": "Card", "version": "2.0", "uid": "urn:uuid:1"}');
+
+        self::assertEquals(new Card(uid: 'urn:uuid:1'), $result->value);
+        self::assertFalse($result->hasIssues());
     }
 
     /**
@@ -230,8 +254,8 @@ final class JsonDecoderTest extends TestCase
      * @param list<string>  $expected
      * @param Result<mixed> $result
      */
-    private function assertWarnings(array $expected, Result $result): void
+    private function assertIssues(array $expected, Result $result): void
     {
-        self::assertSame($expected, array_map(strval(...), $result->warnings));
+        self::assertSame($expected, array_map(strval(...), $result->issues));
     }
 }

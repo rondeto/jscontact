@@ -7,21 +7,21 @@ namespace Rondeto\JSContact\Conversion;
 /**
  * @internal
  */
-final class WarningCollector
+final class IssueCollector
 {
-    /** @var list<Warning> */
-    private array $warnings = [];
+    /** @var list<Issue> */
+    private array $issues = [];
 
     public function add(string $path, string $message): void
     {
-        $this->warnings[] = new Warning($path, $message);
+        $this->issues[] = new Issue($path, $message);
     }
 
     /**
-     * @return list<Warning>
+     * @return list<Issue>
      */
     public function all(): array
     {
-        return $this->warnings;
+        return $this->issues;
     }
 }

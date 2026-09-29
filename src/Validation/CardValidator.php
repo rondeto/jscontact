@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Validation;
 
+use Rondeto\JSContact\Conversion\Issue;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Card;
@@ -22,15 +23,15 @@ use Rondeto\JSContact\Model\Phone;
  */
 final class CardValidator
 {
-    /** @var list<Violation> */
-    private array $violations = [];
+    /** @var list<Issue> */
+    private array $issues = [];
 
     /**
-     * @return list<Violation>
+     * @return list<Issue>
      */
     public function validate(Card $card): array
     {
-        $this->violations = [];
+        $this->issues = [];
 
         $this->nonEmpty('/prodId', $card->prodId);
         $this->nonEmpty('/uid', $card->uid);
@@ -66,7 +67,7 @@ final class CardValidator
             'nicknames', 'emails', 'phones', 'addresses', 'onlineServices', 'links', 'notes', 'keywords',
         ], Registry::UNMODELED_CARD_PROPERTIES);
 
-        return $this->violations;
+        return $this->issues;
     }
 
     private function name(string $path, Name $name): void
@@ -346,7 +347,7 @@ final class CardValidator
 
     private function add(string $path, string $message): void
     {
-        $this->violations[] = new Violation($path, $message);
+        $this->issues[] = new Issue($path, $message);
     }
 
     /**

@@ -12,17 +12,17 @@ namespace Rondeto\JSContact\Conversion;
 final readonly class Result
 {
     /**
-     * @param T             $value
-     * @param list<Warning> $warnings
+     * @param T           $value
+     * @param list<Issue> $issues
      */
     public function __construct(
         public mixed $value,
-        public array $warnings = [],
+        public array $issues = [],
     ) {
     }
 
-    public function hasWarnings(): bool
+    public function hasIssues(): bool
     {
-        return [] !== $this->warnings;
+        return [] !== $this->issues;
     }
 }

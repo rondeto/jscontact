@@ -22,8 +22,9 @@ contact data, and for converting between vCard and JSContact.
   it goes through the generic RFC 9555 mechanism (`vCardProps` / `vCardParams`).
 - **Nothing is lost.** Whatever is not understood is kept and comes back on a vCard → JSContact → vCard
   round trip. Preservation is semantic (properties, parameters, values, groups), not byte for byte.
-- **Lenient on read, strict on write.** A bad value produces a warning, not a failed card.
-- **Warnings, not silent losses.** Every conversion returns what it could not read or had to fix.
+- **Lenient on read, strict on write, by default.** A bad value is reported as an issue, not a failed card.
+- **Issues, not silent losses.** Every conversion reports what it could not read or had to fix. Strict
+  modes refuse such input or output instead.
 - **Stable identifiers.** Converting the same card twice yields the same JSContact map keys: the vCard
   `PROP-ID` when present, otherwise a positional key named after the vCard property (`EMAIL-1`, `EMAIL-2`,
   …), as in the RFC 9555 examples.
@@ -61,12 +62,14 @@ use Rondeto\JSContact\Model\EmailAddress;
 
 // Reading is lenient: invalid values are skipped or corrected, and reported.
 $result = (new JsonDecoder())->decode($json);
-foreach ($result->warnings as $warning) {
-    echo $warning, "\n"; // e.g. "/emails/e1/pref: expected an integer from 1 to 100, ignored the value"
+foreach ($result->issues as $issue) {
+    echo $issue, "\n"; // e.g. "/emails/e1/pref: expected an integer from 1 to 100, ignored the value"
 }
 $card = $result->value;
 
-// Writing is strict: an invalid Card throws an InvalidCardException listing every violation.
+// new JsonDecoder(strict: true) throws an InvalidCardException listing every issue instead.
+
+// Writing is strict: an invalid Card throws an InvalidCardException listing every issue.
 // new JsonEncoder(validate: false) writes it anyway.
 $json = (new JsonEncoder())->encode(new Card(
     uid: 'urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6',

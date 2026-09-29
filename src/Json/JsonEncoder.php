@@ -53,9 +53,9 @@ final readonly class JsonEncoder
      */
     public function normalize(Card $card): \stdClass
     {
-        $violations = $this->validate ? $this->validator->validate($card) : [];
-        if ([] !== $violations) {
-            throw new InvalidCardException($violations);
+        $issues = $this->validate ? $this->validator->validate($card) : [];
+        if ([] !== $issues) {
+            throw new InvalidCardException($issues);
         }
 
         return $this->object([
