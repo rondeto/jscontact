@@ -49,34 +49,11 @@ final class Rfc9553FiguresTest extends TestCase
 
         self::assertSame(self::EXPECTED_WARNINGS[$number] ?? [], array_map(strval(...), $result->warnings));
 
+        // Compares the JSON values, whatever the order of object keys and the formatting.
         $card->version = JsonEncoder::VERSION;
-        self::assertSame(
-            $this->canonical($card),
-            $this->canonical(new JsonEncoder()->normalize($result->value)),
+        self::assertJsonStringEqualsJsonString(
+            json_encode($card, \JSON_THROW_ON_ERROR),
+            new JsonEncoder()->encode($result->value),
         );
-    }
-
-    /**
-     * JSON with object keys sorted, so that property order does not matter.
-     */
-    private function canonical(mixed $value): string
-    {
-        return json_encode(self::sortKeys($value), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
-    }
-
-    private static function sortKeys(mixed $value): mixed
-    {
-        if (\is_array($value)) {
-            return array_map(self::sortKeys(...), $value);
-        }
-
-        if (!$value instanceof \stdClass) {
-            return $value;
-        }
-
-        $properties = array_map(self::sortKeys(...), get_object_vars($value));
-        ksort($properties, \SORT_STRING);
-
-        return (object) $properties;
     }
 }
