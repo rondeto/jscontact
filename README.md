@@ -25,7 +25,8 @@ contact data, and for converting between vCard and JSContact.
 - **Lenient on read, strict on write.** A bad value produces a warning, not a failed card.
 - **Warnings, not silent losses.** Every conversion returns what it could not read or had to fix.
 - **Stable identifiers.** Converting the same card twice yields the same JSContact map keys: the vCard
-  `PROP-ID` when present, otherwise a positional key (`k1`, `k2`, …) per map.
+  `PROP-ID` when present, otherwise a positional key named after the vCard property (`EMAIL-1`, `EMAIL-2`,
+  …), as in the RFC 9555 examples.
 
 ## Out of scope
 
@@ -66,6 +67,7 @@ foreach ($result->warnings as $warning) {
 $card = $result->value;
 
 // Writing is strict: an invalid Card throws an InvalidCardException listing every violation.
+// new JsonEncoder(validate: false) writes it anyway.
 $json = (new JsonEncoder())->encode(new Card(
     uid: 'urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6',
     emails: ['e1' => new EmailAddress('jane@example.com', contexts: ['work'], pref: 1)],

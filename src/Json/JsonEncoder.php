@@ -31,12 +31,13 @@ final readonly class JsonEncoder
     public const string VERSION = '2.0';
 
     public function __construct(
+        private bool $validate = true,
         private CardValidator $validator = new CardValidator(),
     ) {
     }
 
     /**
-     * @throws InvalidCardException
+     * @throws InvalidCardException when validation is on and the Card is invalid
      */
     public function encode(Card $card, bool $pretty = false): string
     {
@@ -48,11 +49,11 @@ final readonly class JsonEncoder
     /**
      * The Card as the value json_decode() would return for its JSON form.
      *
-     * @throws InvalidCardException
+     * @throws InvalidCardException when validation is on and the Card is invalid
      */
     public function normalize(Card $card): \stdClass
     {
-        $violations = $this->validator->validate($card);
+        $violations = $this->validate ? $this->validator->validate($card) : [];
         if ([] !== $violations) {
             throw new InvalidCardException($violations);
         }

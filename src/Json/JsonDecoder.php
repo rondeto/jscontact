@@ -26,7 +26,8 @@ use Rondeto\JSContact\Validation\Registry;
  *
  * Reading is lenient: a value that breaks the specification is skipped or corrected, and
  * reported as a warning. The remaining rule violations (see CardValidator) are reported
- * as warnings too, but the values are kept: fix them before encoding the Card again.
+ * as warnings too, but the values are kept: JsonEncoder refuses such a Card unless its
+ * validation is turned off.
  */
 final readonly class JsonDecoder
 {

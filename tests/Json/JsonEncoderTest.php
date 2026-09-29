@@ -55,4 +55,11 @@ final class JsonEncoderTest extends TestCase
             self::assertSame(['/emails/e1/pref: must be between 1 and 100'], array_map(strval(...), $e->violations));
         }
     }
+
+    public function testValidationCanBeTurnedOff(): void
+    {
+        $json = new JsonEncoder(validate: false)->encode(new Card(kind: Card::KIND_ORG, members: ['urn:uuid:1']));
+
+        self::assertSame('{"@type":"Card","version":"2.0","kind":"org","members":{"urn:uuid:1":true}}', $json);
+    }
 }
