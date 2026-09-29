@@ -1,0 +1,38 @@
+{
+    "name": "rondeto/jscontact",
+    "description": "Typed JSContact (RFC 9553, RFC 9982) model and vCard <-> JSContact conversion (RFC 9555, RFC 9554).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["jscontact", "vcard", "rfc9553", "rfc9555", "rfc9554", "rfc9982", "contacts"],
+    "require": {
+        "php": ">=8.4",
+        "sabre/vobject": "^4.5.6 || ^5.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "phpunit/phpunit": "^13.3",
+        "rector/rector": "^2.6"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rondeto\\JSContact\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Rondeto\\JSContact\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "phpstan/extension-installer": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

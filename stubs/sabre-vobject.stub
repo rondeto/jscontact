@@ -1,0 +1,57 @@
+<?php
+
+// Types sabre/vobject leaves unspecified, for PHPStan.
+
+namespace Sabre\VObject;
+
+/**
+ * @implements \IteratorAggregate<int, Node>
+ * @implements \ArrayAccess<int|string, mixed>
+ */
+abstract class Node implements \IteratorAggregate, \ArrayAccess, \Countable
+{
+}
+
+class Component extends Node
+{
+    /**
+     * @return list<Component|Property>
+     */
+    public function children(): array
+    {
+    }
+
+    /**
+     * @return array<int, Component|Property>
+     */
+    public function select(string $name): array
+    {
+    }
+}
+
+abstract class Property extends Node
+{
+    /**
+     * @return array<mixed>
+     */
+    public function getParts(): array
+    {
+    }
+
+    /**
+     * @return array<string, Parameter>
+     */
+    public function parameters(): array
+    {
+    }
+}
+
+class Parameter extends Node
+{
+    /**
+     * @return list<string>
+     */
+    public function getParts(): array
+    {
+    }
+}
