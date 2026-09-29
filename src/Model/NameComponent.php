@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Model;
 
+use Rondeto\JSContact\Validation\Constraint;
+use Rondeto\JSContact\Validation\Registry;
+
 /**
  * One part of a Name (RFC 9553, section 2.2.1.2).
  */
+#[Constraint\ExtraProperties]
 final readonly class NameComponent
 {
     public const string KIND_TITLE = 'title';
@@ -29,6 +33,7 @@ final readonly class NameComponent
      * @param array<array-key, mixed> $extra Other properties, as JSON values
      */
     public function __construct(
+        #[Constraint\RegisteredValue(Registry::NAME_COMPONENT_KINDS)]
         public string $kind,
         public string $value,
         public ?string $phonetic = null,

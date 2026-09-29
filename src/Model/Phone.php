@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Model;
 
+use Rondeto\JSContact\Validation\Constraint;
+use Rondeto\JSContact\Validation\Registry;
+use Symfony\Component\Validator\Constraints as Assert;
+
 /**
  * A phone number (RFC 9553, section 2.3.3).
  */
+#[Constraint\ExtraProperties]
 final readonly class Phone
 {
     public const string FEATURE_MOBILE = 'mobile';
@@ -33,9 +38,13 @@ final readonly class Phone
      * @param array<array-key, mixed> $extra    Other properties, as JSON values
      */
     public function __construct(
+        #[Assert\NotBlank(message: 'must not be empty')]
         public string $number,
+        #[Constraint\RegisteredValue(Registry::PHONE_FEATURES)]
         public array $features = [],
+        #[Constraint\RegisteredValue(Registry::CONTEXTS)]
         public array $contexts = [],
+        #[Assert\Range(notInRangeMessage: 'must be between 1 and 100', min: 1, max: 100)]
         public ?int $pref = null,
         public ?string $label = null,
         public array $extra = [],

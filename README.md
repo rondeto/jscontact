@@ -77,10 +77,14 @@ $json = (new JsonEncoder())->encode(new Card(
 ));
 ```
 
+The validation rules are [Symfony Validator](https://symfony.com/doc/current/validation.html) constraints on
+the model classes: a Symfony application can validate a `Card` with its own validator, like any other object.
+
 ## Requirements
 
 - PHP 8.4 or later
 - `sabre/vobject` 4.5.6+ or 5.x
+- `symfony/validator` 7.4+ or 8.x
 
 ## Contributing
 

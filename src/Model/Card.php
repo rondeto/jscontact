@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Model;
 
+use Rondeto\JSContact\Validation\Constraint;
+use Rondeto\JSContact\Validation\Registry;
+use Symfony\Component\Validator\Constraints as Assert;
+
 /**
  * A JSContact Card (RFC 9553, section 2, as updated by RFC 9982).
  *
@@ -14,6 +18,8 @@ namespace Rondeto\JSContact\Model;
  * Properties this library does not model yet, unknown properties and vendor-specific
  * properties are kept verbatim in $extra, so that nothing is lost.
  */
+#[Constraint\GroupMembers]
+#[Constraint\ExtraProperties(Registry::UNMODELED_CARD_PROPERTIES)]
 final readonly class Card
 {
     public const string KIND_INDIVIDUAL = 'individual';
@@ -42,21 +48,35 @@ final readonly class Card
      * @param array<array-key, mixed>         $extra          Other properties, as JSON values
      */
     public function __construct(
+        #[Assert\NotBlank(message: 'must not be empty', allowNull: true)]
         public ?string $uid = null,
+        #[Assert\NotBlank(message: 'must not be empty', allowNull: true)]
         public ?string $prodId = null,
         public ?\DateTimeImmutable $created = null,
         public ?\DateTimeImmutable $updated = null,
+        #[Constraint\RegisteredValue(Registry::CARD_KINDS)]
         public ?string $kind = null,
+        #[Assert\NotBlank(message: 'must not be empty', allowNull: true)]
         public ?string $language = null,
+        #[Constraint\RegisteredValue]
         public array $members = [],
+        #[Assert\Valid]
         public ?Name $name = null,
+        #[Constraint\IdKeys, Assert\Valid]
         public array $nicknames = [],
+        #[Constraint\IdKeys, Assert\Valid]
         public array $emails = [],
+        #[Constraint\IdKeys, Assert\Valid]
         public array $phones = [],
+        #[Constraint\IdKeys, Assert\Valid]
         public array $addresses = [],
+        #[Constraint\IdKeys, Assert\Valid]
         public array $onlineServices = [],
+        #[Constraint\IdKeys, Assert\Valid]
         public array $links = [],
+        #[Constraint\IdKeys, Assert\Valid]
         public array $notes = [],
+        #[Constraint\RegisteredValue]
         public array $keywords = [],
         public array $extra = [],
     ) {

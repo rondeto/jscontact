@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Rondeto\JSContact\Validation;
 
 /**
- * Lexical rules shared by the JSON reader and the validator.
+ * Lexical rules shared by the JSON reader and the validation constraints.
  *
  * @internal
  */
 final class Syntax
 {
     /** RFC 9553, section 1.4.1. */
-    private const string ID = '/^[A-Za-z0-9_-]{1,255}$/';
+    public const string ID = '/^[A-Za-z0-9_-]{1,255}$/';
 
     /** RFC 9553, section 1.7.2. */
     private const string IANA_NAME = '/^[A-Za-z0-9@]+$/';
@@ -21,7 +21,13 @@ final class Syntax
     private const string VENDOR_EXTENSION = '/^[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?)*:[^\x00-\x08\x0A-\x1F\x7F"\/~]+$/u';
 
     /** A URI scheme followed by a colon (RFC 3986, section 3.1); the rest is not checked. */
-    private const string URI = '/^[A-Za-z][A-Za-z0-9+.-]*:\S*$/';
+    public const string URI = '/^[A-Za-z][A-Za-z0-9+.-]*:\S*$/';
+
+    /**
+     * Only checks there is exactly one "@" with something on both sides: full RFC 5322
+     * addr-spec validation rejects too many addresses that mail servers accept.
+     */
+    public const string EMAIL_ADDRESS = '/^[^@\s]+@[^@\s]+$/';
 
     /** RFC 9553, section 1.4.5. */
     private const string UTC_DATE_TIME = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d*[1-9])?Z$/';
@@ -43,20 +49,6 @@ final class Syntax
     public static function isVendorExtension(string $value): bool
     {
         return 1 === preg_match(self::VENDOR_EXTENSION, $value);
-    }
-
-    public static function isUri(string $value): bool
-    {
-        return 1 === preg_match(self::URI, $value);
-    }
-
-    /**
-     * Only checks there is exactly one "@" with something on both sides: full RFC 5322
-     * addr-spec validation rejects too many addresses that mail servers accept.
-     */
-    public static function isEmailAddress(string $value): bool
-    {
-        return 1 === preg_match('/^[^@\s]+@[^@\s]+$/', $value);
     }
 
     public static function isUtcDateTime(string $value): bool

@@ -19,6 +19,7 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Validation\CardValidator;
+use Symfony\Component\Validator\Validation;
 
 final class CardValidatorTest extends TestCase
 {
@@ -29,7 +30,7 @@ final class CardValidatorTest extends TestCase
     {
         yield 'empty strings' => [
             new Card(uid: '', prodId: '', language: ''),
-            ['/prodId: must not be empty', '/uid: must not be empty', '/language: must not be empty'],
+            ['/uid: must not be empty', '/prodId: must not be empty', '/language: must not be empty'],
         ];
         yield 'kind case variant' => [new Card(kind: 'Group'), ['/kind: "Group" must be written "group"']];
         yield 'members outside a group' => [
@@ -125,5 +126,15 @@ final class CardValidatorTest extends TestCase
         );
 
         self::assertSame([], new CardValidator()->validate($card));
+    }
+
+    public function testAnySymfonyValidatorCanValidateACard(): void
+    {
+        $validator = Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator();
+
+        $violations = $validator->validate(new Card(emails: ['e1' => new EmailAddress('a@example.com', pref: 0)]));
+
+        self::assertCount(1, $violations);
+        self::assertSame('emails[e1].pref', $violations[0]?->getPropertyPath());
     }
 }

@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Model;
 
+use Rondeto\JSContact\Validation\Constraint;
+use Rondeto\JSContact\Validation\Registry;
+
 /**
  * One part of an Address (RFC 9553, section 2.5.1.2).
  */
+#[Constraint\ExtraProperties]
 final readonly class AddressComponent
 {
     public const string KIND_ROOM = 'room';
@@ -47,6 +51,7 @@ final readonly class AddressComponent
      * @param array<array-key, mixed> $extra Other properties, as JSON values
      */
     public function __construct(
+        #[Constraint\RegisteredValue(Registry::ADDRESS_COMPONENT_KINDS)]
         public string $kind,
         public string $value,
         public ?string $phonetic = null,

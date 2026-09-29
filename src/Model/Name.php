@@ -4,9 +4,17 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\Model;
 
+use Rondeto\JSContact\Validation\Constraint;
+use Rondeto\JSContact\Validation\Registry;
+use Symfony\Component\Validator\Constraints as Assert;
+
 /**
  * The name of the entity a Card represents (RFC 9553, section 2.2.1.1).
  */
+#[Constraint\AtLeastOneProperty(['components', 'full'], 'a name needs components, full, or both')]
+#[Constraint\Components]
+#[Constraint\SortAs]
+#[Constraint\ExtraProperties]
 final readonly class Name
 {
     /**
@@ -15,12 +23,16 @@ final readonly class Name
      * @param array<array-key, mixed>  $extra      Other properties, as JSON values
      */
     public function __construct(
+        #[Assert\Valid]
         public array $components = [],
         public bool $isOrdered = false,
         public ?string $defaultSeparator = null,
+        #[Assert\NotBlank(message: 'must not be empty', allowNull: true)]
         public ?string $full = null,
         public array $sortAs = [],
+        #[Assert\Regex('/^[A-Za-z]{4}$/', message: 'not a script subtag')]
         public ?string $phoneticScript = null,
+        #[Constraint\RegisteredValue(Registry::PHONETIC_SYSTEMS)]
         public ?string $phoneticSystem = null,
         public array $extra = [],
     ) {
