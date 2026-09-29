@@ -1,0 +1,17 @@
+{
+  "name": {
+    "components": [
+      {
+        "kind": "given",
+        "value": "John",
+        "phonetic": "/ˈdʒɑːn/"
+      },
+      {
+        "kind": "surname",
+        "value": "Smith",
+        "phonetic": "/smɪθ/"
+      }
+    ],
+    "phoneticSystem": "ipa"
+  }
+}

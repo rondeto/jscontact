@@ -3,8 +3,7 @@
 A PHP library for [JSContact](https://www.rfc-editor.org/rfc/rfc9553.html), the JSON representation of
 contact data, and for converting between vCard and JSContact.
 
-> **Status: early development (`0.x`).** Nothing is usable yet, and the public API may change in any
-> release until `1.0`.
+> **Status: early development (`0.x`).** The public API may change in any release until `1.0`.
 
 ## Goals
 
@@ -23,10 +22,12 @@ contact data, and for converting between vCard and JSContact.
   it goes through the generic RFC 9555 mechanism (`vCardProps` / `vCardParams`).
 - **Nothing is lost.** Whatever is not understood is kept and comes back on a vCard → JSContact → vCard
   round trip. Preservation is semantic (properties, parameters, values, groups), not byte for byte.
-- **Lenient on read, strict on write.** A bad value produces a warning, not a failed card.
-- **Warnings, not silent losses.** Every conversion returns what it could not read or had to fix.
+- **Lenient on read, strict on write, by default.** A bad value is reported as an issue, not a failed card.
+- **Issues, not silent losses.** Every conversion reports what it could not read or had to fix. Strict
+  modes refuse such input or output instead.
 - **Stable identifiers.** Converting the same card twice yields the same JSContact map keys: the vCard
-  `PROP-ID` when present, otherwise a positional key (`k1`, `k2`, …) per map.
+  `PROP-ID` when present, otherwise a positional key named after the vCard property (`EMAIL-1`, `EMAIL-2`,
+  …), as in the RFC 9555 examples.
 
 ## Out of scope
 
@@ -41,17 +42,49 @@ contact data, and for converting between vCard and JSContact.
 | Area                                             | Status      |
 |--------------------------------------------------|-------------|
 | Tooling and CI                                   | ✅ Done     |
-| Model and JSON: core properties                  | ⏳ Planned  |
+| Model and JSON: core properties                  | ✅ Done     |
 | vCard ⇄ JSContact: core properties               | ⏳ Planned  |
 | Full RFC 9553 / 9554 / 9555 coverage             | ⏳ Planned  |
 
 Core properties: `uid`, `prodId`, `kind`, `members`, `name`, `nicknames`, `emails`, `phones`,
 `addresses`, `onlineServices`, `links`, `notes`, `keywords`.
 
+Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
+back unchanged.
+
+## Usage
+
+```php
+use Rondeto\JSContact\Json\JsonDecoder;
+use Rondeto\JSContact\Json\JsonEncoder;
+use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\EmailAddress;
+
+// Reading is lenient: invalid values are skipped or corrected, and reported.
+$result = (new JsonDecoder())->decode($json);
+foreach ($result->issues as $issue) {
+    echo $issue, "\n"; // e.g. "/emails/e1/pref: expected an integer from 1 to 100, ignored the value"
+}
+$card = $result->value;
+
+// new JsonDecoder(strict: true) throws an InvalidCardException listing every issue instead.
+
+// Writing is strict: an invalid Card throws an InvalidCardException listing every issue.
+// new JsonEncoder(validate: false) writes it anyway.
+$json = (new JsonEncoder())->encode(new Card(
+    uid: 'urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6',
+    emails: ['e1' => new EmailAddress('jane@example.com', contexts: ['work'], pref: 1)],
+));
+```
+
+The validation rules are [Symfony Validator](https://symfony.com/doc/current/validation.html) constraints on
+the model classes: a Symfony application can validate a `Card` with its own validator, like any other object.
+
 ## Requirements
 
 - PHP 8.4 or later
 - `sabre/vobject` 4.5.6+ or 5.x
+- `symfony/validator` 7.4+ or 8.x
 
 ## Contributing
 
@@ -60,3 +93,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [MIT](LICENSE)
+
+## Acknowledgements
+
+The test suite reuses examples from other works. Their origin, license and any changes are detailed in
+[`tests/Fixtures/SOURCES.md`](tests/Fixtures/SOURCES.md).
+
+- **RFC 9553**, "JSContact: A JSON Representation of Contact Data", by Robert Stepanek and Mario Loffredo:
+  every JSON example, © 2024 IETF Trust and the document authors.

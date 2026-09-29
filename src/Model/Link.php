@@ -1,0 +1,39 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Rondeto\JSContact\Model;
+
+use Rondeto\JSContact\Validation\Constraint;
+use Rondeto\JSContact\Validation\Registry;
+use Rondeto\JSContact\Validation\Syntax;
+use Symfony\Component\Validator\Constraints as Assert;
+
+/**
+ * A link to a resource that fits no more specific property (RFC 9553, section 2.6.3).
+ */
+#[Constraint\ExtraProperties]
+final readonly class Link
+{
+    public const string KIND_CONTACT = 'contact';
+
+    /**
+     * @param list<string>            $contexts
+     * @param int|null                $pref     1 (most preferred) to 100
+     * @param array<array-key, mixed> $extra    Other properties, as JSON values
+     */
+    public function __construct(
+        #[Assert\Regex(Syntax::URI, message: '{{ value }} is not a URI')]
+        public string $uri,
+        #[Constraint\RegisteredValue(Registry::LINK_KINDS)]
+        public ?string $kind = null,
+        public ?string $mediaType = null,
+        #[Constraint\RegisteredValue(Registry::CONTEXTS)]
+        public array $contexts = [],
+        #[Assert\Range(notInRangeMessage: 'must be between 1 and 100', min: 1, max: 100)]
+        public ?int $pref = null,
+        public ?string $label = null,
+        public array $extra = [],
+    ) {
+    }
+}

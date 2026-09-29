@@ -1,0 +1,9 @@
+{
+  "links": {
+    "link3": {
+      "kind": "contact",
+      "uri": "mailto:contact@example.com",
+      "pref": 1
+    }
+  }
+}
