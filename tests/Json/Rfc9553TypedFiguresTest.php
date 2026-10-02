@@ -22,6 +22,8 @@ use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 
@@ -128,6 +130,14 @@ final class Rfc9553TypedFiguresTest extends TestCase
             ['o1' => new Organization('ABC, Inc.', [new OrgUnit('North American Division'), new OrgUnit('Marketing')], 'ABC')],
             $this->figure(22)->organizations,
         );
+    }
+
+    public function testFigure23SpeakToAs(): void
+    {
+        self::assertEquals(new SpeakToAs(SpeakToAs::GENDER_NEUTER, [
+            'k19' => new Pronouns('they/them', pref: 2),
+            'k32' => new Pronouns('xe/xir', pref: 1),
+        ]), $this->figure(23)->speakToAs);
     }
 
     public function testFigure24Titles(): void

@@ -37,7 +37,7 @@ use Sabre\VObject\Reader;
 final class Exporter
 {
     /** vCard 4.0 properties that vCard 3.0 does not define. */
-    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI', 'ANNIVERSARY', 'DEATHDATE', 'BIRTHPLACE', 'DEATHPLACE'];
+    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI', 'ANNIVERSARY', 'DEATHDATE', 'BIRTHPLACE', 'DEATHPLACE', 'GRAMGENDER', 'PRONOUNS'];
 
     /** Phone features and the TEL TYPE values they convert to (RFC 9555, Table 3). */
     private const array PHONE_TYPES = [
@@ -122,6 +122,7 @@ final class Exporter
         }
 
         $this->anniversaries($card);
+        $this->speakToAs($card);
 
         $organizationGroups = $this->organizationGroups($card);
         foreach ($card->organizations as $key => $organization) {
@@ -383,6 +384,47 @@ final class Exporter
         }
 
         $this->entry($name, $link->uri, $key, $link->contexts, $link->pref, $link->label, $link->vCardParams, '/links/'.$key, $params);
+    }
+
+    /**
+     * The grammatical gender converts to GRAMGENDER, pronouns to PRONOUNS (RFC 9555, section
+     * 2.5.4). A vendor-specific gender has no vCard value: it is written as JSPROP.
+     */
+    private function speakToAs(Card $card): void
+    {
+        $speakToAs = $card->speakToAs;
+        if (null === $speakToAs) {
+            return;
+        }
+
+        $gender = $speakToAs->grammaticalGender;
+        if (null !== $gender && 1 === preg_match('/^[a-z0-9-]+$/', $gender)) {
+            $group = $speakToAs->vCardParams['group'] ?? null;
+            $this->add('GRAMGENDER', $gender, $this->parameters($speakToAs->vCardParams), \is_string($group) ? $group : null, '/speakToAs/grammaticalGender');
+        } elseif (null !== $gender) {
+            $this->issues->add('/speakToAs/grammaticalGender', \sprintf('vCard has no grammatical gender "%s", wrote it as JSPROP', $gender));
+            // A JSPROP needs its parent to exist: the whole object when there are no pronouns.
+            if ([] === $speakToAs->pronouns) {
+                $this->jsProp('speakToAs', $this->json(new Card(speakToAs: $speakToAs), 'speakToAs'));
+
+                return;
+            }
+
+            $this->jsProp('speakToAs/grammaticalGender', $gender);
+        } elseif ([] !== $speakToAs->vCardParams) {
+            $this->issues->add('/speakToAs/vCardParams', 'no GRAMGENDER property to write them on, left them out');
+        }
+
+        foreach ($speakToAs->pronouns as $key => $pronouns) {
+            $this->entry('PRONOUNS', $pronouns->pronouns, (string) $key, $pronouns->contexts, $pronouns->pref, null, $pronouns->vCardParams, '/speakToAs/pronouns/'.$key);
+            foreach ($pronouns->extra as $name => $value) {
+                $this->jsProp('speakToAs/pronouns/'.$this->escape((string) $key).'/'.$this->escape((string) $name), $value);
+            }
+        }
+
+        foreach ($speakToAs->extra as $name => $value) {
+            $this->jsProp('speakToAs/'.$this->escape((string) $name), $value);
+        }
     }
 
     /**
@@ -756,7 +798,7 @@ final class Exporter
 
     private function collectGroups(Card $card): void
     {
-        $objects = [$card->name, ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
+        $objects = [$card->name, $card->speakToAs, ...$card->speakToAs->pronouns ?? [], ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
         foreach ($objects as $object) {
             $group = $object?->vCardParams['group'] ?? null;
             if (\is_string($group)) {

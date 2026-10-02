@@ -21,6 +21,8 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Validation\CardValidator;
 use Symfony\Component\Validator\Validation;
@@ -124,6 +126,11 @@ final class CardValidatorTest extends TestCase
                 '/anniversaries/a5/date/month: must be between 1 and 12',
             ],
         ];
+        yield 'speakToAs' => [
+            new Card(speakToAs: new SpeakToAs('Neuter', ['p1' => new Pronouns('', pref: 0)])),
+            ['/speakToAs/grammaticalGender: "Neuter" must be written "neuter"', '/speakToAs/pronouns/p1/pronouns: must not be empty', '/speakToAs/pronouns/p1/pref: must be between 1 and 100'],
+        ];
+        yield 'empty speakToAs' => [new Card(speakToAs: new SpeakToAs()), ['/speakToAs: needs a grammatical gender, pronouns, or both']];
         yield 'extra' => [
             new Card(extra: ['uid' => 'x', 'Localizations' => [], 'extra' => 1, 'bad name' => 1, 'localizations' => [], 'example.com:x' => 1]),
             ['/uid: this property is modeled: set it on the object, not in extra', '/Localizations: must be written "localizations"', '/extra: "extra" is a reserved property name', '/bad name: not a valid property name'],

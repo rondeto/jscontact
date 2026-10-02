@@ -15,6 +15,8 @@ use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
@@ -179,6 +181,23 @@ final class VCardDecoderTest extends TestCase
         $card = $this->decode("BDAY:1996-04-15\r\n", '3.0')->value;
 
         self::assertEquals(new PartialDate(1996, 4, 15), $card->anniversaries['ANNIVERSARY-1']->date ?? null);
+    }
+
+    public function testSpeakToAs(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'GRAMGENDER;LANGUAGE=de:Feminine',
+            'GRAMGENDER;LANGUAGE=fr:masculine',
+            'PRONOUNS;LANGUAGE=en;TYPE=work:she/her',
+            '',
+        ]));
+
+        self::assertEquals(new SpeakToAs(
+            'feminine',
+            ['PRONOUNS-1' => new Pronouns('she/her', ['work'], vCardParams: ['language' => 'en'])],
+            vCardParams: ['language' => 'de'],
+        ), $result->value->speakToAs);
+        self::assertSame(['/vCardProps/0: kept GRAMGENDER verbatim: grammatical genders in other languages are not converted yet'], array_map(strval(...), $result->issues));
     }
 
     public function testRepeatedValueParametersAreReported(): void
