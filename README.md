@@ -103,12 +103,6 @@ Map keys come from the vCard `PROP-ID` parameter, or are named after the propert
 `PHONE-2`…); writing a Card to vCard sets `PROP-ID`, so keys survive a round trip. Labels convert to and from
 `X-ABLabel`, as RFC 9555 specifies.
 
-## Requirements
-
-- PHP 8.4 or later
-- `sabre/vobject` 4.5.6+ or 5.x
-- `symfony/validator` 7.4+ or 8.x
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
