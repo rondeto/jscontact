@@ -46,13 +46,13 @@ contact data, and for converting between vCard and JSContact.
 | vCard ⇄ JSContact: core properties               | ✅ Done     |
 | Organizations and titles (ORG, TITLE, ROLE)      | ✅ Done     |
 | Anniversaries (BDAY, ANNIVERSARY…)               | ✅ Done     |
-| speakToAs (GRAMGENDER, PRONOUNS)                 | ⏳ Planned  |
+| speakToAs (GRAMGENDER, PRONOUNS)                 | ✅ Done     |
 | Media, keys, directories, calendars              | ⏳ Planned  |
 | Languages, relations, personal information       | ⏳ Planned  |
 | Card-level GEO and TZ                            | ⏳ Planned  |
 | Localizations (LANGUAGE and ALTID alternatives)  | ⏳ Planned  |
 
-Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `members`, `name`, `nicknames`,
+Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `members`, `name`, `speakToAs`, `nicknames`,
 `organizations`, `titles`, `emails`, `phones`, `addresses`, `onlineServices`, `links`, `notes`, `anniversaries`,
 `keywords`, and
 the RFC 9555 properties `vCardName`, `vCardParams` and `vCardProps`.

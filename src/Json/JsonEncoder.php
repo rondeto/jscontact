@@ -19,6 +19,7 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Pronouns;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
@@ -75,6 +76,12 @@ final readonly class JsonEncoder
             'language' => $card->language,
             'members' => $this->set($card->members),
             'name' => null === $card->name ? null : $this->name($card->name),
+            'speakToAs' => null === $card->speakToAs ? null : $this->object([
+                'grammaticalGender' => $card->speakToAs->grammaticalGender,
+                'pronouns' => $this->map($card->speakToAs->pronouns, $this->pronouns(...)),
+                'vCardName' => $card->speakToAs->vCardName,
+                'vCardParams' => $this->vCardParams($card->speakToAs->vCardParams),
+            ], $card->speakToAs->extra),
             'nicknames' => $this->map($card->nicknames, $this->nickname(...)),
             'organizations' => $this->map($card->organizations, $this->organization(...)),
             'titles' => $this->map($card->titles, $this->title(...)),
@@ -160,6 +167,17 @@ final readonly class JsonEncoder
             'vCardName' => $title->vCardName,
             'vCardParams' => $this->vCardParams($title->vCardParams),
         ], $title->extra);
+    }
+
+    private function pronouns(Pronouns $pronouns): \stdClass
+    {
+        return $this->object([
+            'pronouns' => $pronouns->pronouns,
+            'contexts' => $this->set($pronouns->contexts),
+            'pref' => $pronouns->pref,
+            'vCardName' => $pronouns->vCardName,
+            'vCardParams' => $this->vCardParams($pronouns->vCardParams),
+        ], $pronouns->extra);
     }
 
     private function email(EmailAddress $email): \stdClass

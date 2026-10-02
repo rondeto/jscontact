@@ -24,6 +24,8 @@ use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\CardValidator;
@@ -62,6 +64,7 @@ final class Importer
         'BDAY' => ['anniversaries', 'ANNIVERSARY'],
         'DEATHDATE' => ['anniversaries', 'ANNIVERSARY'],
         'ANNIVERSARY' => ['anniversaries', 'ANNIVERSARY'],
+        'PRONOUNS' => ['pronouns', 'PRONOUNS'],
     ];
 
     /** vCard properties whose JSContact object has a label property, set from X-ABLabel. */
@@ -127,6 +130,11 @@ final class Importer
 
     /** @var array<string, Title> */
     private array $titles = [];
+
+    /** @var array<string, Pronouns> */
+    private array $pronouns = [];
+
+    private ?PropertyReader $grammaticalGender = null;
 
     /** @var array<string, Anniversary> */
     private array $anniversaries = [];
@@ -218,6 +226,7 @@ final class Importer
             language: $this->language,
             members: $this->members,
             name: $name,
+            speakToAs: $this->speakToAs(),
             nicknames: $this->nicknames,
             organizations: $this->organizations,
             titles: $this->titles,
@@ -262,6 +271,8 @@ final class Importer
             'ORG' => $this->organization($property),
             'TITLE', 'ROLE' => $this->title($property),
             'BDAY', 'DEATHDATE', 'ANNIVERSARY' => $this->dates[] = $property,
+            'GRAMGENDER' => $this->grammaticalGender($property),
+            'PRONOUNS' => $this->pronoun($property),
             'BIRTHPLACE', 'DEATHPLACE' => $this->places[$property->name][] = $property,
             default => $this->raw($property),
         };
@@ -617,6 +628,42 @@ final class Importer
     }
 
     /**
+     * GRAMGENDER converts to the grammatical gender (RFC 9555, section 2.5.4). Several of them
+     * are versions in different languages, which convert to localizations: they are not
+     * converted yet.
+     */
+    private function grammaticalGender(PropertyReader $property): void
+    {
+        $value = strtolower(trim($property->text()));
+        if (null !== $this->grammaticalGender) {
+            $this->raw($property, 'grammatical genders in other languages are not converted yet');
+        } elseif (1 !== preg_match('/^[a-z0-9-]+$/', $value) || str_starts_with($value, 'x-')) {
+            $this->raw($property, \sprintf('"%s" is not a valid GRAMGENDER value', $value));
+        } else {
+            $this->grammaticalGender = $property;
+        }
+    }
+
+    private function pronoun(PropertyReader $property): void
+    {
+        $common = $this->common($property);
+        $this->pronouns[$common->key] = new Pronouns($property->text(), $common->contexts, $common->pref, vCardParams: $common->vCardParams);
+    }
+
+    private function speakToAs(): ?SpeakToAs
+    {
+        if (null === $this->grammaticalGender && [] === $this->pronouns) {
+            return null;
+        }
+
+        return new SpeakToAs(
+            grammaticalGender: null === $this->grammaticalGender ? null : strtolower(trim($this->grammaticalGender->text())),
+            pronouns: $this->pronouns,
+            vCardParams: $this->grammaticalGender?->unreadParameters() ?? [],
+        );
+    }
+
+    /**
      * BDAY, DEATHDATE and ANNIVERSARY convert to anniversaries, with the place of BIRTHPLACE
      * and DEATHPLACE (RFC 9555, section 2.5.1). A place without date cannot convert, as an
      * Anniversary needs a date.
@@ -770,6 +817,7 @@ final class Importer
             'organizations' => isset($this->organizations[$key]),
             'titles' => isset($this->titles[$key]),
             'anniversaries' => isset($this->anniversaries[$key]),
+            'pronouns' => isset($this->pronouns[$key]),
             default => isset($this->notes[$key]),
         };
     }
@@ -977,6 +1025,7 @@ final class Importer
             $card = new Card(
                 uid: $card->uid, prodId: $card->prodId, created: $card->created, updated: $card->updated,
                 kind: $card->kind, language: $card->language, members: $card->members, name: $card->name,
+                speakToAs: $card->speakToAs,
                 nicknames: $card->nicknames, organizations: $card->organizations, titles: $card->titles,
                 emails: $card->emails, phones: $card->phones,
                 addresses: $card->addresses, onlineServices: $card->onlineServices, links: $card->links,

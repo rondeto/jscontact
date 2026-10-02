@@ -14,6 +14,8 @@ use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
@@ -132,5 +134,23 @@ final class VCardEncoderTest extends TestCase
 
         self::assertStringContainsString("URL;PROP-ID=l1:https://example.com/?a=1,2\r\n", $vCard);
         self::assertEquals($card, new VCardDecoder()->decode($vCard)[0]->value ?? null);
+    }
+
+    public function testSpeakToAs(): void
+    {
+        $vendor = new Card(speakToAs: new SpeakToAs('example.com:honorific'));
+        $result = new VCardEncoder()->encode($vendor);
+
+        self::assertStringContainsString('JSPROP;JSPTR=speakToAs:{"grammaticalGender":"example.com:honorific"}', $result->value);
+        self::assertEquals($vendor, new VCardDecoder()->decode($result->value)[0]->value ?? null);
+
+        $card = new Card(speakToAs: new SpeakToAs('neuter', ['p1' => new Pronouns('they/them', ['private'], 1)]));
+        $result = new VCardEncoder()->encode($card, VCardVersion::V30);
+
+        self::assertStringContainsString("GRAMGENDER:neuter\r\nPRONOUNS;PROP-ID=p1;TYPE=home,pref:they/them\r\n", $result->value);
+        self::assertSame([
+            '/speakToAs/grammaticalGender: vCard 3.0 does not define GRAMGENDER, wrote it anyway',
+            '/speakToAs/pronouns/p1: vCard 3.0 does not define PRONOUNS, wrote it anyway',
+        ], array_map(strval(...), $result->issues));
     }
 }

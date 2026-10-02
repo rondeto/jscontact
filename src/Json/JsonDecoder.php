@@ -22,6 +22,8 @@ use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Validation\CardValidator;
@@ -99,6 +101,7 @@ final readonly class JsonDecoder
         }
 
         $name = $object->object('name');
+        $speakToAs = $object->object('speakToAs');
 
         return new Card(
             uid: $uid,
@@ -109,6 +112,13 @@ final readonly class JsonDecoder
             language: $object->string('language'),
             members: $object->set('members'),
             name: null === $name ? null : $this->name($name),
+            speakToAs: null === $speakToAs || !$speakToAs->isOfType('SpeakToAs') ? null : new SpeakToAs(
+                grammaticalGender: $speakToAs->enum('grammaticalGender', Registry::GRAMMATICAL_GENDERS),
+                pronouns: $this->map($speakToAs, 'pronouns', 'Pronouns', $this->pronouns(...)),
+                vCardName: $speakToAs->string('vCardName'),
+                vCardParams: $speakToAs->vCardParams(),
+                extra: $speakToAs->extra(),
+            ),
             nicknames: $this->map($object, 'nicknames', 'Nickname', $this->nickname(...)),
             organizations: $this->map($object, 'organizations', 'Organization', $this->organization(...)),
             titles: $this->map($object, 'titles', 'Title', $this->title(...)),
@@ -205,6 +215,23 @@ final readonly class JsonDecoder
             name: $name,
             kind: $object->enum('kind', Registry::TITLE_KINDS),
             organizationId: $object->string('organizationId'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    private function pronouns(JsonObject $object): ?Pronouns
+    {
+        $pronouns = $object->requiredString('pronouns');
+        if (null === $pronouns) {
+            return null;
+        }
+
+        return new Pronouns(
+            pronouns: $pronouns,
+            contexts: $object->set('contexts', Registry::CONTEXTS),
+            pref: $object->pref(),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
             extra: $object->extra(),

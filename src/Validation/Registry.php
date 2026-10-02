@@ -16,7 +16,7 @@ final class Registry
      * Card::$extra.
      */
     public const array UNMODELED_CARD_PROPERTIES = [
-        'relatedTo', 'speakToAs', 'preferredLanguages', 'calendars',
+        'relatedTo', 'preferredLanguages', 'calendars',
         'schedulingAddresses', 'cryptoKeys', 'directories', 'media', 'localizations', 'personalInfo',
     ];
 
@@ -38,6 +38,8 @@ final class Registry
     public const array TITLE_KINDS = ['title', 'role'];
 
     public const array ANNIVERSARY_KINDS = ['birth', 'death', 'wedding'];
+
+    public const array GRAMMATICAL_GENDERS = ['animate', 'common', 'feminine', 'inanimate', 'masculine', 'neuter'];
 
     public const array PHONETIC_SYSTEMS = ['ipa', 'jyut', 'piny'];
 

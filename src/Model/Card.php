@@ -69,6 +69,8 @@ final readonly class Card
         public array $members = [],
         #[Assert\Valid]
         public ?Name $name = null,
+        #[Assert\Valid]
+        public ?SpeakToAs $speakToAs = null,
         #[Constraint\IdKeys, Assert\Valid]
         public array $nicknames = [],
         #[Constraint\IdKeys, Assert\Valid]

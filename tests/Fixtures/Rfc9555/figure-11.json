@@ -1,0 +1,7 @@
+{"speakToAs": {
+  "grammaticalGender": "neuter",
+  "pronouns": {
+    "PRONOUNS-1": {"pronouns": "they/them", "pref": 2},
+    "PRONOUNS-2": {"pronouns": "xe/xir", "pref": 1}
+  }
+}}
