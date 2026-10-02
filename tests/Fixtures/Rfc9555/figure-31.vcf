@@ -1,0 +1,2 @@
+ORG-DIRECTORY;INDEX=1:https://directory.mycompany.example.com
+ORG-DIRECTORY;PREF=1:ldap://ldap.tech.example/o=Tech,ou=Engineering

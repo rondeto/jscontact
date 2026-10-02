@@ -93,6 +93,16 @@ final class PropertyReader
     }
 
     /**
+     * The TYPE values not read yet, lowercase.
+     *
+     * @return list<string>
+     */
+    public function unreadTypes(): array
+    {
+        return $this->types;
+    }
+
+    /**
      * Whether TYPE has the value, marking it as read if so.
      */
     public function takeType(string $type): bool
@@ -213,9 +223,13 @@ final class PropertyReader
             $jCard = [$jCard[0], $jCard[1], 'unknown', $raw];
         }
 
+        // VALUE is in the jCard type. Only a quoted-printable value is decoded: its ENCODING and
+        // CHARSET no longer apply, while a base64 value still needs its ENCODING.
+        $isQuotedPrintable = 'quoted-printable' === strtolower($this->peek('ENCODING') ?? '');
         $parameters = [];
         foreach ($this->parameters as $name => $values) {
-            if (!\in_array($name, self::ENCODING_PARAMETERS, true) && [] !== $values) {
+            $isDecoded = 'VALUE' === $name || ($isQuotedPrintable && \in_array($name, ['ENCODING', 'CHARSET'], true));
+            if (!$isDecoded && [] !== $values) {
                 $parameters[strtolower($name)] = 1 === \count($values) ? $values[0] : $values;
             }
         }

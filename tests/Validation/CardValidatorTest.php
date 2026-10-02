@@ -10,9 +10,12 @@ use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
+use Rondeto\JSContact\Model\Calendar;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
@@ -131,6 +134,20 @@ final class CardValidatorTest extends TestCase
             ['/speakToAs/grammaticalGender: "Neuter" must be written "neuter"', '/speakToAs/pronouns/p1/pronouns: must not be empty', '/speakToAs/pronouns/p1/pref: must be between 1 and 100'],
         ];
         yield 'empty speakToAs' => [new Card(speakToAs: new SpeakToAs()), ['/speakToAs: needs a grammatical gender, pronouns, or both']];
+        yield 'resources' => [
+            new Card(
+                media: ['m1' => new Media('photo.jpg', 'Photo', 'jpeg')],
+                directories: ['d1' => new Directory('ldap://x', 'directory', listAs: 0)],
+                calendars: ['c1' => new Calendar('https://x', 'freebusy')],
+            ),
+            [
+                '/media/m1/uri: "photo.jpg" is not a URI',
+                '/media/m1/kind: "Photo" must be written "photo"',
+                '/media/m1/mediaType: not a media type',
+                '/directories/d1/listAs: must be greater than 0',
+                '/calendars/c1/kind: "freebusy" must be written "freeBusy"',
+            ],
+        ];
         yield 'extra' => [
             new Card(extra: ['uid' => 'x', 'Localizations' => [], 'extra' => 1, 'bad name' => 1, 'localizations' => [], 'example.com:x' => 1]),
             ['/uid: this property is modeled: set it on the object, not in extra', '/Localizations: must be written "localizations"', '/extra: "extra" is a reserved property name', '/bad name: not a valid property name'],

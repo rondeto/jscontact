@@ -10,9 +10,13 @@ use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
+use Rondeto\JSContact\Model\Calendar;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\CryptoKey;
+use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
@@ -23,6 +27,7 @@ use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
@@ -175,6 +180,15 @@ final class Rfc9553TypedFiguresTest extends TestCase
         ], $this->figure(27)->phones);
     }
 
+    public function testFigures29And30Calendars(): void
+    {
+        self::assertEquals([
+            'calA' => new Calendar('webcal://calendar.example.com/calA.ics', Calendar::KIND_CALENDAR),
+            'project-a' => new Calendar('https://calendar.example.com/busy/project-a', Calendar::KIND_FREE_BUSY),
+        ], $this->figure(29)->calendars);
+        self::assertEquals(['sched1' => new SchedulingAddress('mailto:janedoe@example.com')], $this->figure(30)->schedulingAddresses);
+    }
+
     public function testFigure31Address(): void
     {
         self::assertEquals(['k23' => new Address(
@@ -204,12 +218,31 @@ final class Rfc9553TypedFiguresTest extends TestCase
         self::assertSame(['localizations'], array_keys($card->extra));
     }
 
+    public function testFigures34To36KeysAndDirectories(): void
+    {
+        self::assertEquals(['mykey1' => new CryptoKey('https://www.example.com/keys/jdoe.cer')], $this->figure(34)->cryptoKeys);
+        self::assertStringStartsWith('data:application/pgp-keys;base64,LS0tLS1C', $this->figure(35)->cryptoKeys['mykey2']->uri ?? '');
+        self::assertEquals([
+            'dir1' => new Directory('https://dir.example.com/addrbook/jdoe/Jean%20Dupont.vcf', Directory::KIND_ENTRY),
+            'dir2' => new Directory('ldap://ldap.example/o=Example%20Tech,ou=Engineering', Directory::KIND_DIRECTORY, pref: 1),
+        ], $this->figure(36)->directories);
+    }
+
     public function testFigure37Links(): void
     {
         self::assertEquals(
             ['link3' => new Link('mailto:contact@example.com', kind: Link::KIND_CONTACT, pref: 1)],
             $this->figure(37)->links,
         );
+    }
+
+    public function testFigure38Media(): void
+    {
+        self::assertEquals([
+            'res45' => new Media('CID:JOHNQ.part8.19960229T080000.xyzMail@example.com', Media::KIND_SOUND),
+            'res47' => new Media('https://www.example.com/pub/logos/abccorp.jpg', Media::KIND_LOGO),
+            'res1' => new Media('data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAASABIAAD/4...', Media::KIND_PHOTO),
+        ], $this->figure(38)->media);
     }
 
     public function testFigure41Anniversaries(): void

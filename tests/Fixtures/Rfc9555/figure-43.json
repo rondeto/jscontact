@@ -1,0 +1,4 @@
+{"calendars": {
+  "CAL-1": {"kind": "calendar", "uri": "https://cal.example.com/calA", "pref": 1},
+  "CAL-2": {"kind": "calendar", "uri": "https://ftp.example.com/calA.ics", "mediaType": "text/calendar"}
+}}

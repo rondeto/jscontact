@@ -29,6 +29,9 @@ final class Syntax
      */
     public const string EMAIL_ADDRESS = '/^[^@\s]+@[^@\s]+$/';
 
+    /** A media type (RFC 6838, section 4.2), parameters allowed. */
+    public const string MEDIA_TYPE = '~^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*(\s*;.*)?$~';
+
     /** RFC 9553, section 1.4.5. */
     private const string UTC_DATE_TIME = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d*[1-9])?Z$/';
 

@@ -1,0 +1,4 @@
+{"directories": {
+  "DIRECTORY-1": {"kind": "directory", "uri": "https://directory.mycompany.example.com", "listAs": 1},
+  "DIRECTORY-2": {"kind": "directory", "uri": "ldap://ldap.tech.example/o=Tech,ou=Engineering", "pref": 1}
+}}

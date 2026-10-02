@@ -10,7 +10,10 @@ use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\CryptoKey;
+use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
@@ -198,6 +201,30 @@ final class VCardDecoderTest extends TestCase
             vCardParams: ['language' => 'de'],
         ), $result->value->speakToAs);
         self::assertSame(['/vCardProps/0: kept GRAMGENDER verbatim: grammatical genders in other languages are not converted yet'], array_map(strval(...), $result->issues));
+    }
+
+    public function testVersion3MediaAreEmbeddedOrTyped(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQ',
+            'LOGO;VALUE=uri;TYPE=PNG;TYPE=work:https://example.com/logo.png',
+            'KEY;ENCODING=b;TYPE=PGP:LS0tLS1C',
+            'KEY;VALUE=text:not a uri',
+            'ORG-DIRECTORY;INDEX=first:ldap://ldap.example.com',
+            '',
+        ]), '3.0');
+        $card = $result->value;
+
+        self::assertEquals([
+            'PHOTO-1' => new Media('data:image/jpeg;base64,/9j/4AAQ', Media::KIND_PHOTO),
+            'LOGO-1' => new Media('https://example.com/logo.png', Media::KIND_LOGO, 'image/png', ['work']),
+        ], $card->media);
+        self::assertEquals(['KEY-1' => new CryptoKey('data:application/pgp-keys;base64,LS0tLS1C')], $card->cryptoKeys);
+        self::assertEquals(['DIRECTORY-1' => new Directory('ldap://ldap.example.com', Directory::KIND_DIRECTORY, vCardParams: ['index' => 'first'])], $card->directories);
+        self::assertSame([
+            '/vCardProps/0: kept KEY verbatim: not a URI',
+            '/: ORG-DIRECTORY: INDEX "first" is not a positive integer, kept it in vCardParams',
+        ], array_map(strval(...), $result->issues));
     }
 
     public function testRepeatedValueParametersAreReported(): void

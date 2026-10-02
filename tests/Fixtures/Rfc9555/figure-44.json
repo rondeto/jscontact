@@ -1,0 +1,4 @@
+{"calendars": {
+  "FBURL-1": {"kind": "freeBusy", "uri": "https://www.example.com/busy/janedoe", "pref": 1},
+  "FBURL-2": {"kind": "freeBusy", "uri": "https://example.com/busy/project-a.ifb", "mediaType": "text/calendar"}
+}}
