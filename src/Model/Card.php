@@ -41,6 +41,7 @@ final readonly class Card
      * @param array<array-key, Nickname>         $nicknames
      * @param array<array-key, Organization>     $organizations
      * @param array<array-key, Title>            $titles
+     * @param array<array-key, Anniversary>      $anniversaries
      * @param array<array-key, EmailAddress>     $emails
      * @param array<array-key, Phone>            $phones
      * @param array<array-key, Address>          $addresses
@@ -86,6 +87,8 @@ final readonly class Card
         public array $links = [],
         #[Constraint\IdKeys, Assert\Valid]
         public array $notes = [],
+        #[Constraint\IdKeys, Assert\Valid]
+        public array $anniversaries = [],
         #[Constraint\RegisteredValue]
         public array $keywords = [],
         #[Assert\Regex('/^[A-Za-z0-9-]+$/', message: 'not a vCard property name')]

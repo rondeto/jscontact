@@ -10,6 +10,7 @@ use Rondeto\JSContact\Json\JsonDecoder;
 use Rondeto\JSContact\Json\JsonEncoder;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
@@ -21,6 +22,7 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
@@ -56,6 +58,10 @@ final class Importer
         // Titles and roles share their keys, as in RFC 9555, Figure 27.
         'TITLE' => ['titles', 'TITLE'],
         'ROLE' => ['titles', 'TITLE'],
+        // Anniversaries are named after ANNIVERSARY, as in RFC 9555, Figure 9.
+        'BDAY' => ['anniversaries', 'ANNIVERSARY'],
+        'DEATHDATE' => ['anniversaries', 'ANNIVERSARY'],
+        'ANNIVERSARY' => ['anniversaries', 'ANNIVERSARY'],
     ];
 
     /** vCard properties whose JSContact object has a label property, set from X-ABLabel. */
@@ -121,6 +127,15 @@ final class Importer
 
     /** @var array<string, Title> */
     private array $titles = [];
+
+    /** @var array<string, Anniversary> */
+    private array $anniversaries = [];
+
+    /** @var list<PropertyReader> BDAY, DEATHDATE and ANNIVERSARY properties, in order */
+    private array $dates = [];
+
+    /** @var array<string, list<PropertyReader>> BIRTHPLACE and DEATHPLACE properties, by name */
+    private array $places = [];
 
     /** @var array<string, Note> */
     private array $notes = [];
@@ -189,6 +204,7 @@ final class Importer
 
         $name = $this->name();
         $this->linkTitles();
+        $this->anniversaries();
         foreach ($this->labels as $label) {
             $this->raw($label); // No entry of its group has a label property.
         }
@@ -211,6 +227,7 @@ final class Importer
             onlineServices: $this->onlineServices,
             links: $this->links,
             notes: $this->notes,
+            anniversaries: $this->anniversaries,
             keywords: array_values(array_unique($this->keywords)),
             vCardProps: $this->vCardProps,
         );
@@ -244,6 +261,8 @@ final class Importer
             'NOTE' => $this->note($property),
             'ORG' => $this->organization($property),
             'TITLE', 'ROLE' => $this->title($property),
+            'BDAY', 'DEATHDATE', 'ANNIVERSARY' => $this->dates[] = $property,
+            'BIRTHPLACE', 'DEATHPLACE' => $this->places[$property->name][] = $property,
             default => $this->raw($property),
         };
     }
@@ -598,6 +617,81 @@ final class Importer
     }
 
     /**
+     * BDAY, DEATHDATE and ANNIVERSARY convert to anniversaries, with the place of BIRTHPLACE
+     * and DEATHPLACE (RFC 9555, section 2.5.1). A place without date cannot convert, as an
+     * Anniversary needs a date.
+     */
+    private function anniversaries(): void
+    {
+        $seen = [];
+        foreach ($this->dates as $property) {
+            [$kind, $placeName] = match ($property->name) {
+                'BDAY' => [Anniversary::KIND_BIRTH, 'BIRTHPLACE'],
+                'DEATHDATE' => [Anniversary::KIND_DEATH, 'DEATHPLACE'],
+                default => [Anniversary::KIND_WEDDING, null],
+            };
+            if (null !== $placeName && isset($seen[$property->name])) {
+                $this->raw($property, \sprintf('more than one %s property', $property->name));
+                continue;
+            }
+
+            $isText = 'text' === strtolower($property->peek('VALUE') ?? '');
+            $date = $isText ? null : Dates::parse($property->property->getRawMimeDirValue());
+            if (null === $date) {
+                $this->raw($property, $isText ? 'a date as text has no JSContact counterpart' : 'not a date, nor a UTC date-time');
+                continue;
+            }
+
+            $seen[$property->name] = true;
+
+            $calendarScale = $date instanceof PartialDate ? $property->parameter('CALSCALE') : null;
+            if (null !== $calendarScale) {
+                $date = new PartialDate($date->year, $date->month, $date->day, strtolower($calendarScale));
+            }
+
+            $place = null;
+            if (null !== $placeName && [] !== ($this->places[$placeName] ?? [])) {
+                $place = $this->place(array_shift($this->places[$placeName]));
+            }
+
+            $common = $this->common($property);
+            $this->anniversaries[$common->key] = new Anniversary(
+                kind: $kind,
+                date: $date,
+                place: $place,
+                vCardParams: $common->vCardParams,
+            );
+        }
+
+        foreach ($this->places as $name => $places) {
+            foreach ($places as $place) {
+                $this->raw($place, \sprintf('no %s property to attach the place to', 'BIRTHPLACE' === $name ? 'BDAY' : 'DEATHDATE'));
+            }
+        }
+    }
+
+    /**
+     * A BIRTHPLACE or DEATHPLACE: text is the full address, a "geo:" URI its coordinates.
+     * Other URIs have no JSContact counterpart, and stay verbatim.
+     */
+    private function place(PropertyReader $property): ?Address
+    {
+        $isUri = 'uri' === strtolower($property->peek('VALUE') ?? '');
+        $value = $property->text();
+        if ($isUri && 0 !== stripos($value, 'geo:')) {
+            $this->raw($property, 'only "geo:" URIs convert to a place');
+
+            return null;
+        }
+
+        return new Address(
+            coordinates: $isUri ? $value : null,
+            full: $isUri ? null : $value,
+            vCardParams: $property->unreadParameters(),
+        );
+    }
+
+    /**
      * Reads what all entries have in common: key, contexts, preference and label. Must be
      * called after reading the property-specific parameters, as the unread ones go to
      * vCardParams.
@@ -622,7 +716,7 @@ final class Importer
         // their TYPE and PREF stay in vCardParams.
         $pref = null;
         $contexts = [];
-        if (!\in_array($map, ['notes', 'titles', 'organizations'], true)) {
+        if (!\in_array($map, ['notes', 'titles', 'organizations', 'anniversaries'], true)) {
             $value = $property->parameter('PREF');
             if (null !== $value && 1 === preg_match('/^\d+$/', $value) && (int) $value >= 1 && (int) $value <= 100) {
                 $pref = (int) $value;
@@ -635,7 +729,7 @@ final class Importer
             }
         }
 
-        if (!\in_array($map, ['notes', 'titles'], true)) {
+        if (!\in_array($map, ['notes', 'titles', 'anniversaries'], true)) {
             $types = ['home' => 'private', 'work' => 'work'];
             if ('addresses' === $map) {
                 $types += ['billing' => 'billing', 'delivery' => 'delivery'];
@@ -675,6 +769,7 @@ final class Importer
             'links' => isset($this->links[$key]),
             'organizations' => isset($this->organizations[$key]),
             'titles' => isset($this->titles[$key]),
+            'anniversaries' => isset($this->anniversaries[$key]),
             default => isset($this->notes[$key]),
         };
     }
@@ -885,7 +980,7 @@ final class Importer
                 nicknames: $card->nicknames, organizations: $card->organizations, titles: $card->titles,
                 emails: $card->emails, phones: $card->phones,
                 addresses: $card->addresses, onlineServices: $card->onlineServices, links: $card->links,
-                notes: $card->notes, keywords: $card->keywords, vCardProps: $this->vCardProps,
+                notes: $card->notes, anniversaries: $card->anniversaries, keywords: $card->keywords, vCardProps: $this->vCardProps,
             );
 
             return new Result($card, [...$this->issues->all(), ...$this->validator->validate($card)]);

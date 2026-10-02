@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
@@ -18,6 +19,7 @@ use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Validation\CardValidator;
@@ -104,6 +106,23 @@ final class CardValidatorTest extends TestCase
         yield 'title' => [
             new Card(titles: ['t1' => new Title('Boss', 'Role', 'o1'), 't2' => new Title('', organizationId: 'not valid')]),
             ['/titles/t1/organizationId: no organization has this Id', '/titles/t2/organizationId: no organization has this Id', '/titles/t1/kind: "Role" must be written "role"', '/titles/t2/name: must not be empty', '/titles/t2/organizationId: not a valid Id'],
+        ];
+        yield 'partial dates' => [
+            new Card(anniversaries: [
+                'a1' => new Anniversary('Birth', new PartialDate(day: 3)),
+                'a2' => new Anniversary('death', new PartialDate(month: 2)),
+                'a3' => new Anniversary('wedding', new PartialDate(2023, 2, 29, 'Hebrew')),
+                'a4' => new Anniversary('wedding', new PartialDate(month: 2, day: 29)),
+                'a5' => new Anniversary('wedding', new PartialDate(2000, 13)),
+            ]),
+            [
+                '/anniversaries/a1/kind: "Birth" must be written "birth"',
+                '/anniversaries/a1/date: a partial date needs a year, a month, or both',
+                '/anniversaries/a2/date/month: a month needs a year or a day',
+                '/anniversaries/a3/date/day: this month has no such day',
+                '/anniversaries/a3/date/calendarScale: must be lowercase',
+                '/anniversaries/a5/date/month: must be between 1 and 12',
+            ],
         ];
         yield 'extra' => [
             new Card(extra: ['uid' => 'x', 'Localizations' => [], 'extra' => 1, 'bad name' => 1, 'localizations' => [], 'example.com:x' => 1]),

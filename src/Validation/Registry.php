@@ -17,8 +17,7 @@ final class Registry
      */
     public const array UNMODELED_CARD_PROPERTIES = [
         'relatedTo', 'speakToAs', 'preferredLanguages', 'calendars',
-        'schedulingAddresses', 'cryptoKeys', 'directories', 'media', 'localizations',
-        'anniversaries', 'personalInfo',
+        'schedulingAddresses', 'cryptoKeys', 'directories', 'media', 'localizations', 'personalInfo',
     ];
 
     /**
@@ -37,6 +36,8 @@ final class Registry
     public const array LINK_KINDS = ['contact'];
 
     public const array TITLE_KINDS = ['title', 'role'];
+
+    public const array ANNIVERSARY_KINDS = ['birth', 'death', 'wedding'];
 
     public const array PHONETIC_SYSTEMS = ['ipa', 'jyut', 'piny'];
 
