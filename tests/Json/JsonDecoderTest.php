@@ -14,6 +14,7 @@ use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
 
 final class JsonDecoderTest extends TestCase
@@ -214,6 +215,21 @@ final class JsonDecoderTest extends TestCase
         $this->assertIssues([
             '/members: members can only be set when kind is "group"',
             '/emails/e1/address: "not an email" is not an email address',
+        ], $result);
+    }
+
+    public function testVCardPropertiesAreRead(): void
+    {
+        $result = $this->decode([
+            'vCardProps' => [['x-foo', ['X-Bar' => 'Hello', 'group' => 'item1'], 'unknown', 'World!'], ['bad']],
+            'phones' => ['p1' => ['number' => 'tel:+1', 'vCardName' => 'tel', 'vCardParams' => ['group' => 'item1', 'x-list' => ['a', 'b'], 'x-bad' => 1]]],
+        ]);
+
+        self::assertEquals([new VCardProperty('x-foo', ['x-bar' => 'Hello', 'group' => 'item1'], 'unknown', ['World!'])], $result->value->vCardProps);
+        self::assertEquals(new Phone('tel:+1', vCardName: 'tel', vCardParams: ['group' => 'item1', 'x-list' => ['a', 'b']]), $result->value->phones['p1'] ?? null);
+        $this->assertIssues([
+            '/phones/p1/vCardParams/x-bad: expected a string or a list of strings, ignored the parameter',
+            '/vCardProps/1: not a jCard property, ignored the entry',
         ], $result);
     }
 

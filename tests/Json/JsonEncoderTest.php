@@ -9,6 +9,8 @@ use Rondeto\JSContact\Json\JsonEncoder;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Note;
+use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
 
 final class JsonEncoderTest extends TestCase
@@ -61,5 +63,18 @@ final class JsonEncoderTest extends TestCase
         $json = new JsonEncoder(validate: false)->encode(new Card(kind: Card::KIND_ORG, members: ['urn:uuid:1']));
 
         self::assertSame('{"@type":"Card","version":"2.0","kind":"org","members":{"urn:uuid:1":true}}', $json);
+    }
+
+    public function testVCardPropertiesAreWritten(): void
+    {
+        $card = new Card(
+            phones: ['p1' => new Phone('tel:+1', vCardName: 'tel', vCardParams: ['group' => 'item1', 'x-list' => ['a', 'b']])],
+            vCardProps: [new VCardProperty('x-foo', [], 'unknown', ['World!'])],
+        );
+
+        self::assertSame(
+            '{"@type":"Card","version":"2.0","phones":{"p1":{"number":"tel:+1","vCardName":"tel","vCardParams":{"group":"item1","x-list":["a","b"]}}},"vCardProps":[["x-foo",{},"unknown","World!"]]}',
+            new JsonEncoder()->encode($card),
+        );
     }
 }

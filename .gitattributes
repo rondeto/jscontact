@@ -12,3 +12,6 @@
 /phpstan.dist.neon      export-ignore
 /phpunit.dist.xml       export-ignore
 /rector.php             export-ignore
+
+# Fixtures are kept byte for byte, line endings included.
+/tests/Fixtures/** -text

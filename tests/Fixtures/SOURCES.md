@@ -19,3 +19,37 @@ Changes:
   joined.
 - Figure 36 misses the closing brace of `directories`: it is added.
 - Figures 2 and 5 are ABNF, not JSON: they are not included.
+
+## `Rfc9555/`
+
+vCard and JSON examples from [RFC 9555](https://www.rfc-editor.org/rfc/rfc9555.html), "JSContact: Converting from
+and to vCard", by M. Loffredo and R. Stepanek. `figure-NN.vcf` is the vCard of Figure NN and `figure-NN.json` the
+JSContact it converts to. Only the figures of the properties this library converts are included.
+
+Copyright (c) 2024 IETF Trust and the persons identified as the document authors. Used under the
+[IETF Trust Legal Provisions](https://trustee.ietf.org/license-info).
+
+Changes:
+
+- Folded lines are folded with a single space, as RFC 6350 requires; the RFC indents them further for readability.
+- Map keys follow this library's naming (`PHONE-1`, `EMAIL-1`, `OS-1`) where the figure uses other ones: `p1` in
+  Figures 1 and 40, `email1` in Figure 46, `os1` in Figure 47. RFC 9555 leaves the choice of keys to implementations.
+- Figure 15: the address components are in the order of the ADR value, which section 2.6.1 requires; the figure lists
+  the street number and name first.
+- Figure 20: `vCardName` is set to `"socialprofile"`, which section 2.7.5 allows, so that the property converts back
+  to SOCIALPROFILE.
+- Figure 24: no `uid`, since the vCard has no UID and RFC 9982 forbids generating one.
+- Figure 40: the group is kept in `vCardParams`, which section 2.3.9 allows, so that it survives a round trip.
+
+`tests/VCard/Rfc9555JsonToVCardTest.php` also uses Figures 48 to 53. Figure 53 follows
+[erratum 8786](https://www.rfc-editor.org/errata/eid8786): the street number is the 11th ADR component, and the
+street name the 12th, as RFC 9554 defines.
+
+## `CozyVcard/`
+
+vCards exported by Android, Apple, Google, iOS and Firefox OS address books, from the test suite of
+[cozy-vcard](https://github.com/cozy/cozy-vcard/tree/master/test), commit `f4420db849c966ead553fb0985a077b4201a20a5`.
+
+Copyright (c) 2012 Cozy Cloud. MIT License, see [`CozyVcard/LICENSE`](CozyVcard/LICENSE).
+
+Unchanged. `google-full.vcf` has a broken line folding at line 27, which the tests expect to be reported.

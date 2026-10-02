@@ -1,0 +1,4 @@
+{"emails": {
+  "EMAIL-1": {"contexts": {"work": true}, "address": "jqpublic@xyz.example.com"},
+  "EMAIL-2": {"address": "jane_doe@example.com", "pref": 1}
+}}

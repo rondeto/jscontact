@@ -111,6 +111,9 @@ final readonly class JsonDecoder
             links: $this->map($object, 'links', 'Link', $this->link(...)),
             notes: $this->map($object, 'notes', 'Note', $this->note(...)),
             keywords: $object->set('keywords'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            vCardProps: $object->vCardProps(),
             extra: $object->extra(Registry::UNMODELED_CARD_PROPERTIES),
         );
     }
@@ -122,13 +125,15 @@ final readonly class JsonDecoder
         }
 
         return new Name(
-            components: $this->components($object, 'NameComponent', Registry::NAME_COMPONENT_KINDS, static fn (string $kind, string $value, ?string $phonetic, array $extra): NameComponent => new NameComponent($kind, $value, $phonetic, $extra)),
+            components: $this->components($object, 'NameComponent', Registry::NAME_COMPONENT_KINDS, static fn (string $kind, string $value, JsonObject $component): NameComponent => new NameComponent($kind, $value, $component->string('phonetic'), $component->string('vCardName'), $component->vCardParams(), $component->extra())),
             isOrdered: $object->bool('isOrdered') ?? false,
             defaultSeparator: $object->string('defaultSeparator'),
             full: $object->string('full'),
             sortAs: $object->stringMap('sortAs'),
             phoneticScript: $object->string('phoneticScript'),
             phoneticSystem: $object->enum('phoneticSystem', Registry::PHONETIC_SYSTEMS),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -144,6 +149,8 @@ final readonly class JsonDecoder
             name: $name,
             contexts: $object->set('contexts', Registry::CONTEXTS),
             pref: $object->pref(),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -160,6 +167,8 @@ final readonly class JsonDecoder
             contexts: $object->set('contexts', Registry::CONTEXTS),
             pref: $object->pref(),
             label: $object->string('label'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -177,6 +186,8 @@ final readonly class JsonDecoder
             contexts: $object->set('contexts', Registry::CONTEXTS),
             pref: $object->pref(),
             label: $object->string('label'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -184,7 +195,7 @@ final readonly class JsonDecoder
     private function address(JsonObject $object): Address
     {
         return new Address(
-            components: $this->components($object, 'AddressComponent', Registry::ADDRESS_COMPONENT_KINDS, static fn (string $kind, string $value, ?string $phonetic, array $extra): AddressComponent => new AddressComponent($kind, $value, $phonetic, $extra)),
+            components: $this->components($object, 'AddressComponent', Registry::ADDRESS_COMPONENT_KINDS, static fn (string $kind, string $value, JsonObject $component): AddressComponent => new AddressComponent($kind, $value, $component->string('phonetic'), $component->string('vCardName'), $component->vCardParams(), $component->extra())),
             isOrdered: $object->bool('isOrdered') ?? false,
             countryCode: $object->string('countryCode'),
             coordinates: $object->string('coordinates'),
@@ -195,6 +206,8 @@ final readonly class JsonDecoder
             pref: $object->pref(),
             phoneticScript: $object->string('phoneticScript'),
             phoneticSystem: $object->enum('phoneticSystem', Registry::PHONETIC_SYSTEMS),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -208,6 +221,8 @@ final readonly class JsonDecoder
             contexts: $object->set('contexts', Registry::CONTEXTS),
             pref: $object->pref(),
             label: $object->string('label'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -226,6 +241,8 @@ final readonly class JsonDecoder
             contexts: $object->set('contexts', Registry::CONTEXTS),
             pref: $object->pref(),
             label: $object->string('label'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -245,8 +262,12 @@ final readonly class JsonDecoder
             author: null === $author || !$author->isOfType('Author') ? null : new Author(
                 name: $author->string('name'),
                 uri: $author->string('uri'),
+                vCardName: $author->string('vCardName'),
+                vCardParams: $author->vCardParams(),
                 extra: $author->extra(),
             ),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
     }
@@ -276,8 +297,8 @@ final readonly class JsonDecoder
     /**
      * @template T of NameComponent|AddressComponent
      *
-     * @param list<string>                                                      $kinds
-     * @param callable(string, string, string|null, array<array-key, mixed>): T $create
+     * @param list<string>                            $kinds
+     * @param callable(string, string, JsonObject): T $create
      *
      * @return list<T>
      */
@@ -301,7 +322,7 @@ final readonly class JsonDecoder
                 continue;
             }
 
-            $components[] = $create($kind, $value, $object->string('phonetic'), $object->extra());
+            $components[] = $create($kind, $value, $object);
         }
 
         return $components;

@@ -43,14 +43,15 @@ contact data, and for converting between vCard and JSContact.
 |--------------------------------------------------|-------------|
 | Tooling and CI                                   | ✅ Done     |
 | Model and JSON: core properties                  | ✅ Done     |
-| vCard ⇄ JSContact: core properties               | ⏳ Planned  |
+| vCard ⇄ JSContact: core properties               | ✅ Done     |
 | Full RFC 9553 / 9554 / 9555 coverage             | ⏳ Planned  |
 
 Core properties: `uid`, `prodId`, `kind`, `members`, `name`, `nicknames`, `emails`, `phones`,
 `addresses`, `onlineServices`, `links`, `notes`, `keywords`.
 
 Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
-back unchanged.
+back unchanged. vCard properties that are not converted yet (ORG, TITLE, BDAY, PHOTO…) and vendor extensions are
+kept verbatim in `vCardProps`, as RFC 9555 allows, and written back unchanged.
 
 ## Usage
 
@@ -80,6 +81,28 @@ $json = (new JsonEncoder())->encode(new Card(
 The validation rules are [Symfony Validator](https://symfony.com/doc/current/validation.html) constraints on
 the model classes: a Symfony application can validate a `Card` with its own validator, like any other object.
 
+### vCard
+
+```php
+use Rondeto\JSContact\VCard\VCardDecoder;
+use Rondeto\JSContact\VCard\VCardEncoder;
+use Rondeto\JSContact\VCard\VCardVersion;
+
+// One result per vCard of the text. Reading is lenient: what cannot be converted is kept
+// in vCardProps and reported as an issue.
+foreach ((new VCardDecoder())->decode(file_get_contents('contacts.vcf')) as $result) {
+    $card = $result->value;
+}
+
+// Writing reports what vCard, or the version asked for, cannot hold.
+$result = (new VCardEncoder())->encode($card, VCardVersion::V30);
+file_put_contents('contact.vcf', $result->value);
+```
+
+Map keys come from the vCard `PROP-ID` parameter, or are named after the property otherwise (`EMAIL-1`,
+`PHONE-2`…); writing a Card to vCard sets `PROP-ID`, so keys survive a round trip. Labels convert to and from
+`X-ABLabel`, as RFC 9555 specifies.
+
 ## Requirements
 
 - PHP 8.4 or later
@@ -101,3 +124,7 @@ The test suite reuses examples from other works. Their origin, license and any c
 
 - **RFC 9553**, "JSContact: A JSON Representation of Contact Data", by Robert Stepanek and Mario Loffredo:
   every JSON example, © 2024 IETF Trust and the document authors.
+- **RFC 9555**, "JSContact: Converting from and to vCard", by Mario Loffredo and Robert Stepanek: the conversion
+  examples, © 2024 IETF Trust and the document authors.
+- **[cozy-vcard](https://github.com/cozy/cozy-vcard)**, by Cozy Cloud: vCards exported by real address books
+  (MIT License).

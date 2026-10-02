@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rondeto\JSContact\Json;
 
 use Rondeto\JSContact\Conversion\IssueCollector;
+use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\Registry;
 use Rondeto\JSContact\Validation\Syntax;
 
@@ -290,6 +291,68 @@ final class JsonObject
     }
 
     /**
+     * The vCardParams property (RFC 9555, section 2.15.2).
+     *
+     * @return array<string, string|list<string>>
+     */
+    public function vCardParams(): array
+    {
+        $value = $this->take('vCardParams');
+        if (null === $value) {
+            return [];
+        }
+
+        if (!$value instanceof \stdClass) {
+            $this->warn('vCardParams', 'expected an object, ignored the value');
+
+            return [];
+        }
+
+        $parameters = [];
+        foreach (get_object_vars($value) as $name => $parameter) {
+            $parameter = $this->jCardParameter($parameter);
+            if (null === $parameter) {
+                $this->warn('vCardParams/'.$this->escape((string) $name), 'expected a string or a list of strings, ignored the parameter');
+            } else {
+                $parameters[strtolower((string) $name)] = $parameter;
+            }
+        }
+
+        return $parameters;
+    }
+
+    /**
+     * The vCardProps property (RFC 9555, section 2.15.1): jCard properties.
+     *
+     * @return list<VCardProperty>
+     */
+    public function vCardProps(): array
+    {
+        $value = $this->take('vCardProps');
+        if (null === $value) {
+            return [];
+        }
+
+        if (!\is_array($value) || !array_is_list($value)) {
+            $this->warn('vCardProps', 'expected an array, ignored the value');
+
+            return [];
+        }
+
+        $properties = [];
+        foreach ($value as $index => $item) {
+            $property = $this->jCardProperty($item);
+            if (null === $property) {
+                $this->warn('vCardProps/'.$index, 'not a jCard property, ignored the entry');
+            } else {
+                $properties[] = $property;
+            }
+        }
+
+        return $properties;
+    }
+
+    /**
      * Every property not read so far, kept verbatim. Invalid property names are dropped.
      *
      * @param list<string> $registered Registered properties this object may hold unmodeled
@@ -353,5 +416,57 @@ final class JsonObject
     private function escape(string $token): string
     {
         return strtr($token, ['~' => '~0', '/' => '~1']);
+    }
+
+    /**
+     * @return string|list<string>|null
+     */
+    private function jCardParameter(mixed $value): string|array|null
+    {
+        if (\is_string($value)) {
+            return $value;
+        }
+
+        if (!\is_array($value) || [] === $value) {
+            return null;
+        }
+
+        $strings = [];
+        foreach ($value as $item) {
+            if (!\is_string($item)) {
+                return null;
+            }
+
+            $strings[] = $item;
+        }
+
+        return $strings;
+    }
+
+    /**
+     * Reads a jCard property: [name, parameters, type, value, ...] (RFC 7095, section 3.3).
+     */
+    private function jCardProperty(mixed $value): ?VCardProperty
+    {
+        if (!\is_array($value) || !array_is_list($value) || \count($value) < 4) {
+            return null;
+        }
+
+        [$name, $parameters, $type] = $value;
+        if (!\is_string($name) || !\is_string($type) || !$parameters instanceof \stdClass) {
+            return null;
+        }
+
+        $jCardParameters = [];
+        foreach (get_object_vars($parameters) as $parameterName => $parameter) {
+            $parameter = $this->jCardParameter($parameter);
+            if (null === $parameter) {
+                return null;
+            }
+
+            $jCardParameters[strtolower((string) $parameterName)] = $parameter;
+        }
+
+        return new VCardProperty(strtolower($name), $jCardParameters, strtolower($type), \array_slice($value, 3));
     }
 }

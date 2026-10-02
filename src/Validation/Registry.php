@@ -18,13 +18,13 @@ final class Registry
     public const array UNMODELED_CARD_PROPERTIES = [
         'relatedTo', 'organizations', 'speakToAs', 'titles', 'preferredLanguages', 'calendars',
         'schedulingAddresses', 'cryptoKeys', 'directories', 'media', 'localizations',
-        'anniversaries', 'personalInfo', 'vCardName', 'vCardParams', 'vCardProps',
+        'anniversaries', 'personalInfo',
     ];
 
     /**
-     * Properties registered for every object type (RFC 9555, sections 3.2 and 3.3).
+     * Registered properties that every object type may hold but that are not modeled yet.
      */
-    public const array UNMODELED_COMMON_PROPERTIES = ['vCardName', 'vCardParams'];
+    public const array UNMODELED_COMMON_PROPERTIES = [];
 
     public const array CARD_KINDS = ['individual', 'group', 'org', 'location', 'device', 'application'];
 
