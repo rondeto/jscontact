@@ -17,13 +17,15 @@ use Symfony\Component\Validator\Constraints as Assert;
 final readonly class Address
 {
     /**
-     * @param list<AddressComponent>  $components
-     * @param string|null             $countryCode ISO 3166-1 alpha-2 code
-     * @param string|null             $coordinates A "geo:" URI
-     * @param string|null             $timeZone    An IANA Time Zone Database name
-     * @param list<string>            $contexts
-     * @param int|null                $pref        1 (most preferred) to 100
-     * @param array<array-key, mixed> $extra       Other properties, as JSON values
+     * @param list<AddressComponent>             $components
+     * @param string|null                        $countryCode ISO 3166-1 alpha-2 code
+     * @param string|null                        $coordinates A "geo:" URI
+     * @param string|null                        $timeZone    An IANA Time Zone Database name
+     * @param list<string>                       $contexts
+     * @param int|null                           $pref        1 (most preferred) to 100
+     * @param string|null                        $vCardName   The name of the vCard property this object was converted from (RFC 9555, section 2.15.3)
+     * @param array<string, string|list<string>> $vCardParams vCard parameters this object has no property for, in jCard form (RFC 9555, section 2.15.2)
+     * @param array<array-key, mixed>            $extra       Other properties, as JSON values
      */
     public function __construct(
         #[Assert\Valid]
@@ -46,6 +48,10 @@ final readonly class Address
         public ?string $phoneticScript = null,
         #[Constraint\RegisteredValue(Registry::PHONETIC_SYSTEMS)]
         public ?string $phoneticSystem = null,
+        #[Assert\Regex('/^[A-Za-z0-9-]+$/', message: 'not a vCard property name')]
+        public ?string $vCardName = null,
+        #[Constraint\VCardParams]
+        public array $vCardParams = [],
         public array $extra = [],
     ) {
     }

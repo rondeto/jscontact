@@ -77,6 +77,8 @@ final readonly class JsonEncoder
             'links' => $this->map($card->links, $this->link(...)),
             'notes' => $this->map($card->notes, $this->note(...)),
             'keywords' => $this->set($card->keywords),
+            'vCardName' => $card->vCardName,
+            'vCardParams' => $this->vCardParams($card->vCardParams),
         ], $card->extra);
     }
 
@@ -90,6 +92,8 @@ final readonly class JsonEncoder
             'sortAs' => [] === $name->sortAs ? null : $this->object($name->sortAs),
             'phoneticScript' => $name->phoneticScript,
             'phoneticSystem' => $name->phoneticSystem,
+            'vCardName' => $name->vCardName,
+            'vCardParams' => $this->vCardParams($name->vCardParams),
         ], $name->extra);
     }
 
@@ -99,6 +103,8 @@ final readonly class JsonEncoder
             'kind' => $component->kind,
             'value' => $component->value,
             'phonetic' => $component->phonetic,
+            'vCardName' => $component->vCardName,
+            'vCardParams' => $this->vCardParams($component->vCardParams),
         ], $component->extra);
     }
 
@@ -108,6 +114,8 @@ final readonly class JsonEncoder
             'name' => $nickname->name,
             'contexts' => $this->set($nickname->contexts),
             'pref' => $nickname->pref,
+            'vCardName' => $nickname->vCardName,
+            'vCardParams' => $this->vCardParams($nickname->vCardParams),
         ], $nickname->extra);
     }
 
@@ -118,6 +126,8 @@ final readonly class JsonEncoder
             'contexts' => $this->set($email->contexts),
             'pref' => $email->pref,
             'label' => $email->label,
+            'vCardName' => $email->vCardName,
+            'vCardParams' => $this->vCardParams($email->vCardParams),
         ], $email->extra);
     }
 
@@ -129,6 +139,8 @@ final readonly class JsonEncoder
             'contexts' => $this->set($phone->contexts),
             'pref' => $phone->pref,
             'label' => $phone->label,
+            'vCardName' => $phone->vCardName,
+            'vCardParams' => $this->vCardParams($phone->vCardParams),
         ], $phone->extra);
     }
 
@@ -146,6 +158,8 @@ final readonly class JsonEncoder
             'pref' => $address->pref,
             'phoneticScript' => $address->phoneticScript,
             'phoneticSystem' => $address->phoneticSystem,
+            'vCardName' => $address->vCardName,
+            'vCardParams' => $this->vCardParams($address->vCardParams),
         ], $address->extra);
     }
 
@@ -155,6 +169,8 @@ final readonly class JsonEncoder
             'kind' => $component->kind,
             'value' => $component->value,
             'phonetic' => $component->phonetic,
+            'vCardName' => $component->vCardName,
+            'vCardParams' => $this->vCardParams($component->vCardParams),
         ], $component->extra);
     }
 
@@ -167,6 +183,8 @@ final readonly class JsonEncoder
             'contexts' => $this->set($service->contexts),
             'pref' => $service->pref,
             'label' => $service->label,
+            'vCardName' => $service->vCardName,
+            'vCardParams' => $this->vCardParams($service->vCardParams),
         ], $service->extra);
     }
 
@@ -179,6 +197,8 @@ final readonly class JsonEncoder
             'contexts' => $this->set($link->contexts),
             'pref' => $link->pref,
             'label' => $link->label,
+            'vCardName' => $link->vCardName,
+            'vCardParams' => $this->vCardParams($link->vCardParams),
         ], $link->extra);
     }
 
@@ -188,6 +208,8 @@ final readonly class JsonEncoder
             'note' => $note->note,
             'created' => $this->dateTime($note->created),
             'author' => null === $note->author ? null : $this->author($note->author),
+            'vCardName' => $note->vCardName,
+            'vCardParams' => $this->vCardParams($note->vCardParams),
         ], $note->extra);
     }
 
@@ -196,6 +218,8 @@ final readonly class JsonEncoder
         return $this->object([
             'name' => $author->name,
             'uri' => $author->uri,
+            'vCardName' => $author->vCardName,
+            'vCardParams' => $this->vCardParams($author->vCardParams),
         ], $author->extra);
     }
 
@@ -271,5 +295,13 @@ final readonly class JsonEncoder
     private function dateTime(?\DateTimeImmutable $dateTime): ?string
     {
         return null === $dateTime ? null : Syntax::formatUtcDateTime($dateTime);
+    }
+
+    /**
+     * @param array<string, string|list<string>> $parameters
+     */
+    private function vCardParams(array $parameters): ?\stdClass
+    {
+        return [] === $parameters ? null : (object) $parameters;
     }
 }

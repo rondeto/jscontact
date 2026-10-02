@@ -35,17 +35,20 @@ final readonly class Card
     public const string KIND_APPLICATION = 'application';
 
     /**
-     * @param string|null                     $kind           null means "individual", the default
-     * @param list<string>                    $members        The uid of each member of this group Card
-     * @param array<array-key, Nickname>      $nicknames
-     * @param array<array-key, EmailAddress>  $emails
-     * @param array<array-key, Phone>         $phones
-     * @param array<array-key, Address>       $addresses
-     * @param array<array-key, OnlineService> $onlineServices
-     * @param array<array-key, Link>          $links
-     * @param array<array-key, Note>          $notes
-     * @param list<string>                    $keywords
-     * @param array<array-key, mixed>         $extra          Other properties, as JSON values
+     * @param string|null                        $kind           null means "individual", the default
+     * @param list<string>                       $members        The uid of each member of this group Card
+     * @param array<array-key, Nickname>         $nicknames
+     * @param array<array-key, EmailAddress>     $emails
+     * @param array<array-key, Phone>            $phones
+     * @param array<array-key, Address>          $addresses
+     * @param array<array-key, OnlineService>    $onlineServices
+     * @param array<array-key, Link>             $links
+     * @param array<array-key, Note>             $notes
+     * @param list<string>                       $keywords
+     * @param string|null                        $vCardName      The name of the vCard property this object was converted from (RFC 9555, section 2.15.3)
+     * @param array<string, string|list<string>> $vCardParams    vCard parameters this object has no property for, in jCard form (RFC 9555, section 2.15.2)
+     * @param list<VCardProperty>                $vCardProps     vCard properties this Card has no property for (RFC 9555, section 2.15.1)
+     * @param array<array-key, mixed>            $extra          Other properties, as JSON values
      */
     public function __construct(
         #[Assert\NotBlank(message: 'must not be empty', allowNull: true)]
@@ -78,6 +81,12 @@ final readonly class Card
         public array $notes = [],
         #[Constraint\RegisteredValue]
         public array $keywords = [],
+        #[Assert\Regex('/^[A-Za-z0-9-]+$/', message: 'not a vCard property name')]
+        public ?string $vCardName = null,
+        #[Constraint\VCardParams]
+        public array $vCardParams = [],
+        #[Assert\Valid]
+        public array $vCardProps = [],
         public array $extra = [],
     ) {
     }

@@ -100,7 +100,7 @@ final class CardValidatorTest extends TestCase
             ['/uid: this property is modeled: set it on the object, not in extra', '/Organizations: must be written "organizations"', '/extra: "extra" is a reserved property name', '/bad name: not a valid property name'],
         ];
         yield 'nested extra' => [
-            new Card(emails: ['e1' => new EmailAddress('a@example.com', extra: ['Label' => 'x', 'vCardParams' => []])]),
+            new Card(emails: ['e1' => new EmailAddress('a@example.com', extra: ['Label' => 'x', 'example.com:x' => []])]),
             ['/emails/e1/Label: this property is modeled: set it on the object, not in extra'],
         ];
     }

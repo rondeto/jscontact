@@ -14,13 +14,19 @@ use Symfony\Component\Validator\Constraints as Assert;
 final readonly class Note
 {
     /**
-     * @param array<array-key, mixed> $extra Other properties, as JSON values
+     * @param string|null                        $vCardName   The name of the vCard property this object was converted from (RFC 9555, section 2.15.3)
+     * @param array<string, string|list<string>> $vCardParams vCard parameters this object has no property for, in jCard form (RFC 9555, section 2.15.2)
+     * @param array<array-key, mixed>            $extra       Other properties, as JSON values
      */
     public function __construct(
         public string $note,
         public ?\DateTimeImmutable $created = null,
         #[Assert\Valid]
         public ?Author $author = null,
+        #[Assert\Regex('/^[A-Za-z0-9-]+$/', message: 'not a vCard property name')]
+        public ?string $vCardName = null,
+        #[Constraint\VCardParams]
+        public array $vCardParams = [],
         public array $extra = [],
     ) {
     }
