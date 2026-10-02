@@ -19,7 +19,10 @@ use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
+use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\Syntax;
@@ -49,6 +52,10 @@ final class Importer
         'URL' => ['links', 'LINK'],
         'CONTACT-URI' => ['links', 'CONTACT'],
         'NOTE' => ['notes', 'NOTE'],
+        'ORG' => ['organizations', 'ORG'],
+        // Titles and roles share their keys, as in RFC 9555, Figure 27.
+        'TITLE' => ['titles', 'TITLE'],
+        'ROLE' => ['titles', 'TITLE'],
     ];
 
     /** vCard properties whose JSContact object has a label property, set from X-ABLabel. */
@@ -108,6 +115,12 @@ final class Importer
 
     /** @var array<string, Link> */
     private array $links = [];
+
+    /** @var array<string, Organization> */
+    private array $organizations = [];
+
+    /** @var array<string, Title> */
+    private array $titles = [];
 
     /** @var array<string, Note> */
     private array $notes = [];
@@ -175,6 +188,7 @@ final class Importer
         }
 
         $name = $this->name();
+        $this->linkTitles();
         foreach ($this->labels as $label) {
             $this->raw($label); // No entry of its group has a label property.
         }
@@ -189,6 +203,8 @@ final class Importer
             members: $this->members,
             name: $name,
             nicknames: $this->nicknames,
+            organizations: $this->organizations,
+            titles: $this->titles,
             emails: $this->emails,
             phones: $this->phones,
             addresses: $this->addresses,
@@ -226,6 +242,8 @@ final class Importer
             'IMPP', 'SOCIALPROFILE' => $this->onlineService($property),
             'URL', 'CONTACT-URI' => $this->link($property),
             'NOTE' => $this->note($property),
+            'ORG' => $this->organization($property),
+            'TITLE', 'ROLE' => $this->title($property),
             default => $this->raw($property),
         };
     }
@@ -492,6 +510,94 @@ final class Importer
     }
 
     /**
+     * An ORG property (RFC 9555, section 2.9.4): the organization name, then its units.
+     */
+    private function organization(PropertyReader $property): void
+    {
+        // ORG components are not lists: sabre's parts are right, escaped commas included.
+        $parts = array_map(static fn (mixed $part): string => \is_string($part) ? $part : '', array_values($property->property->getParts()));
+        while ([] !== $parts && '' === end($parts)) {
+            array_pop($parts);
+        }
+
+        if ([] === $parts) {
+            $this->raw($property, 'empty value');
+
+            return;
+        }
+
+        $name = array_shift($parts);
+        if (\in_array('', $parts, true)) {
+            $this->raw($property, 'an organizational unit has no name');
+
+            return;
+        }
+
+        // The first item sorts the organization, the next ones its units.
+        $sortAs = [];
+        if ($property->has('SORT-AS')) {
+            $sortAs = explode(',', implode(',', $property->peekAll('SORT-AS')));
+            if (\count($sortAs) > 1 + \count($parts)) {
+                $this->issues->add('', 'ORG: SORT-AS has more items than the value has components, kept it in vCardParams');
+                $sortAs = [];
+            } else {
+                $property->parameter('SORT-AS');
+            }
+        }
+
+        $common = $this->common($property);
+        $this->organizations[$common->key] = new Organization(
+            name: '' === $name ? null : $name,
+            units: array_map(
+                static fn (string $unit, int $index): OrgUnit => new OrgUnit($unit, '' === ($sortAs[$index + 1] ?? '') ? null : $sortAs[$index + 1]),
+                $parts,
+                array_keys($parts),
+            ),
+            sortAs: '' === ($sortAs[0] ?? '') ? null : $sortAs[0],
+            contexts: $common->contexts,
+            vCardParams: $common->vCardParams,
+        );
+    }
+
+    /**
+     * A TITLE or ROLE property (RFC 9555, section 2.9.6). Its organization is set once all
+     * organizations are read, see linkTitles().
+     */
+    private function title(PropertyReader $property): void
+    {
+        $common = $this->common($property);
+        $this->titles[$common->key] = new Title(
+            name: $property->text(),
+            kind: 'ROLE' === $property->name ? Title::KIND_ROLE : Title::KIND_TITLE,
+            vCardParams: $common->vCardParams,
+        );
+    }
+
+    /**
+     * Sets the organization of each title whose group holds exactly one ORG property
+     * (RFC 9555, section 2.9.6).
+     */
+    private function linkTitles(): void
+    {
+        foreach ($this->titles as $key => $title) {
+            $group = $title->vCardParams['group'] ?? null;
+            if (!\is_string($group)) {
+                continue;
+            }
+
+            $organizations = array_keys(array_filter($this->organizations, static fn (Organization $organization): bool => ($organization->vCardParams['group'] ?? null) === $group));
+            if (1 === \count($organizations)) {
+                $this->titles[$key] = new Title(
+                    name: $title->name,
+                    kind: $title->kind,
+                    organizationId: (string) $organizations[0],
+                    vCardParams: $title->vCardParams,
+                );
+            }
+        }
+    }
+
+    /**
      * Reads what all entries have in common: key, contexts, preference and label. Must be
      * called after reading the property-specific parameters, as the unread ones go to
      * vCardParams.
@@ -512,10 +618,11 @@ final class Importer
             $key = $this->keys->next($map, $prefix);
         }
 
-        // A Note has no contexts nor preference: its TYPE and PREF stay in vCardParams.
+        // Notes and titles have no contexts, notes, titles and organizations no preference:
+        // their TYPE and PREF stay in vCardParams.
         $pref = null;
         $contexts = [];
-        if ('notes' !== $map) {
+        if (!\in_array($map, ['notes', 'titles', 'organizations'], true)) {
             $value = $property->parameter('PREF');
             if (null !== $value && 1 === preg_match('/^\d+$/', $value) && (int) $value >= 1 && (int) $value <= 100) {
                 $pref = (int) $value;
@@ -526,7 +633,9 @@ final class Importer
             if ($property->takeType('pref')) {
                 $pref = 1; // vCard 3.0 and 2.1
             }
+        }
 
+        if (!\in_array($map, ['notes', 'titles'], true)) {
             $types = ['home' => 'private', 'work' => 'work'];
             if ('addresses' === $map) {
                 $types += ['billing' => 'billing', 'delivery' => 'delivery'];
@@ -564,6 +673,8 @@ final class Importer
             'addresses' => isset($this->addresses[$key]),
             'onlineServices' => isset($this->onlineServices[$key]),
             'links' => isset($this->links[$key]),
+            'organizations' => isset($this->organizations[$key]),
+            'titles' => isset($this->titles[$key]),
             default => isset($this->notes[$key]),
         };
     }
@@ -771,7 +882,8 @@ final class Importer
             $card = new Card(
                 uid: $card->uid, prodId: $card->prodId, created: $card->created, updated: $card->updated,
                 kind: $card->kind, language: $card->language, members: $card->members, name: $card->name,
-                nicknames: $card->nicknames, emails: $card->emails, phones: $card->phones,
+                nicknames: $card->nicknames, organizations: $card->organizations, titles: $card->titles,
+                emails: $card->emails, phones: $card->phones,
                 addresses: $card->addresses, onlineServices: $card->onlineServices, links: $card->links,
                 notes: $card->notes, keywords: $card->keywords, vCardProps: $this->vCardProps,
             );
@@ -786,6 +898,12 @@ final class Importer
 
     private function raw(PropertyReader $property, ?string $reason = null): void
     {
+        // It still takes its position, so that the keys of the next properties do not depend
+        // on whether this one converts.
+        if (isset(self::ENTRIES[$property->name])) {
+            $this->keys->skip(self::ENTRIES[$property->name][1]);
+        }
+
         $index = \count($this->vCardProps);
         $this->vCardProps[] = $property->toVCardProperty($this->rawValue($property));
         if (null !== $reason) {

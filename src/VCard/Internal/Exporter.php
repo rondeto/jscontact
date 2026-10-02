@@ -14,7 +14,10 @@ use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
+use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\Registry;
 use Rondeto\JSContact\VCard\VCardVersion;
@@ -112,6 +115,16 @@ final class Exporter
 
         foreach ($card->notes as $key => $note) {
             $this->note((string) $key, $note);
+        }
+
+        $organizationGroups = $this->organizationGroups($card);
+        foreach ($card->organizations as $key => $organization) {
+            $this->organization((string) $key, $organization, $organizationGroups[$key] ?? null);
+        }
+
+        foreach ($card->titles as $key => $title) {
+            $group = null === $title->organizationId ? null : ($organizationGroups[$title->organizationId] ?? null);
+            $this->title((string) $key, $title, $group);
         }
 
         foreach ($card->members as $member) {
@@ -366,6 +379,48 @@ final class Exporter
         $this->entry($name, $link->uri, $key, $link->contexts, $link->pref, $link->label, $link->vCardParams, '/links/'.$key, $params);
     }
 
+    /**
+     * The group of each organization a title is held in, so that the TITLE or ROLE property
+     * can share it (RFC 9555, section 2.9.6): the one it was read with, or a new one.
+     *
+     * @return array<array-key, string>
+     */
+    private function organizationGroups(Card $card): array
+    {
+        $groups = [];
+        foreach ($card->titles as $title) {
+            $organization = null === $title->organizationId ? null : ($card->organizations[$title->organizationId] ?? null);
+            if (null !== $organization && !isset($groups[$title->organizationId])) {
+                $group = $organization->vCardParams['group'] ?? null;
+                $groups[$title->organizationId] = \is_string($group) ? $group : $this->newGroup();
+            }
+        }
+
+        return $groups;
+    }
+
+    private function organization(string $key, Organization $organization, ?string $group): void
+    {
+        $params = [];
+        $sortAs = [$organization->sortAs ?? '', ...array_map(static fn (OrgUnit $unit): string => $unit->sortAs ?? '', $organization->units)];
+        if ('' !== implode('', $sortAs)) {
+            $params['SORT-AS'] = rtrim(implode(',', $sortAs), ',');
+        }
+
+        $value = [$organization->name ?? '', ...array_map(static fn (OrgUnit $unit): string => $unit->name, $organization->units)];
+        $this->entry('ORG', $value, $key, $organization->contexts, null, null, $organization->vCardParams, '/organizations/'.$key, $params, group: $group);
+    }
+
+    private function title(string $key, Title $title, ?string $group): void
+    {
+        $name = Title::KIND_ROLE === $title->kind ? 'ROLE' : 'TITLE';
+        if (null !== $title->kind && !\in_array($title->kind, [Title::KIND_TITLE, Title::KIND_ROLE], true)) {
+            $this->issues->add('/titles/'.$key.'/kind', \sprintf('vCard has no title of kind "%s", wrote a TITLE', $title->kind));
+        }
+
+        $this->entry($name, $title->name, $key, [], null, null, $title->vCardParams, '/titles/'.$key, group: $group);
+    }
+
     private function note(string $key, Note $note): void
     {
         $params = [];
@@ -393,8 +448,9 @@ final class Exporter
      * @param array<string, string|list<string>> $vCardParams
      * @param array<string, string>              $params      Property-specific parameters
      * @param list<string>                       $types       Property-specific TYPE values
+     * @param string|null                        $group       The group to write the property in, if not that of vCardParams
      */
-    private function entry(string $name, string|array $value, string $key, array $contexts, ?int $pref, ?string $label, array $vCardParams, string $path, array $params = [], array $types = []): void
+    private function entry(string $name, string|array $value, string $key, array $contexts, ?int $pref, ?string $label, array $vCardParams, string $path, array $params = [], array $types = [], ?string $group = null): void
     {
         foreach ($contexts as $context) {
             $type = match ($context) {
@@ -431,7 +487,7 @@ final class Exporter
             $params['TYPE'] = array_values(array_unique($types));
         }
 
-        $group = \is_string($vCardParams['group'] ?? null) ? $vCardParams['group'] : null;
+        $group ??= \is_string($vCardParams['group'] ?? null) ? $vCardParams['group'] : null;
         if (null !== $label) {
             $group ??= $this->newGroup();
         }
@@ -498,7 +554,8 @@ final class Exporter
         $maps = [
             'nicknames' => $card->nicknames, 'emails' => $card->emails, 'phones' => $card->phones,
             'addresses' => $card->addresses, 'onlineServices' => $card->onlineServices,
-            'links' => $card->links, 'notes' => $card->notes,
+            'links' => $card->links, 'notes' => $card->notes, 'organizations' => $card->organizations,
+            'titles' => $card->titles,
         ];
         foreach ($maps as $map => $entries) {
             foreach ($entries as $key => $entry) {
@@ -513,7 +570,11 @@ final class Exporter
                 }
 
                 if ($entry instanceof Address) {
-                    $this->componentExtras('/addresses/'.$key, $entry->components);
+                    $this->arrayItemExtras('/addresses/'.$key.'/components', $entry->components);
+                }
+
+                if ($entry instanceof Organization) {
+                    $this->arrayItemExtras('/organizations/'.$key.'/units', $entry->units);
                 }
             }
         }
@@ -523,18 +584,21 @@ final class Exporter
                 $this->jsProp('name/'.$this->escape((string) $name), $value);
             }
 
-            $this->componentExtras('/name', $card->name->components);
+            $this->arrayItemExtras('/name/components', $card->name->components);
         }
     }
 
     /**
-     * @param list<object{extra: array<array-key, mixed>}> $components
+     * Objects in arrays (name and address components, organizational units) cannot be
+     * pointed at by JSPROP (RFC 9555, section 3.2.1).
+     *
+     * @param list<object{extra: array<array-key, mixed>}> $items
      */
-    private function componentExtras(string $path, array $components): void
+    private function arrayItemExtras(string $path, array $items): void
     {
-        foreach ($components as $index => $component) {
-            if ([] !== $component->extra) {
-                $this->issues->add($path.'/components/'.$index, 'properties inside components cannot be written to vCard, left them out');
+        foreach ($items as $index => $item) {
+            if ([] !== $item->extra) {
+                $this->issues->add($path.'/'.$index, 'properties of objects in arrays cannot be written to vCard, left them out');
             }
         }
     }
@@ -578,7 +642,7 @@ final class Exporter
 
     private function collectGroups(Card $card): void
     {
-        $objects = [$card->name, ...$card->nicknames, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
+        $objects = [$card->name, ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
         foreach ($objects as $object) {
             $group = $object?->vCardParams['group'] ?? null;
             if (\is_string($group)) {

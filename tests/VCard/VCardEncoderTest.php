@@ -7,7 +7,10 @@ namespace Rondeto\JSContact\Tests\VCard;
 use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\VCard\VCardEncoder;
@@ -50,16 +53,16 @@ final class VCardEncoderTest extends TestCase
     {
         $card = new Card(
             phones: ['p1' => new Phone('tel:+1', features: ['hologram'], contexts: ['example.com:car'])],
-            extra: ['organizations' => ['o1' => ['name' => 'ACME']]],
+            extra: ['localizations' => ['fr' => ['name/full' => 'ACME']]],
         );
 
         $result = new VCardEncoder()->encode($card);
 
-        self::assertStringContainsString('JSPROP;JSPTR=organizations:{"o1":{"name":"ACME"}}', $result->value);
+        self::assertStringContainsString('JSPROP;JSPTR=localizations:{"fr":{"name/full":"ACME"}}', $result->value);
         self::assertSame([
             '/phones/p1/features/hologram: vCard has no TEL type for this feature, left it out',
             '/phones/p1/contexts/example.com:car: vCard has no TYPE for this context, left it out',
-            '/organizations: not converted to vCard properties yet, wrote it as JSPROP',
+            '/localizations: not converted to vCard properties yet, wrote it as JSPROP',
         ], array_map(strval(...), $result->issues));
     }
 
@@ -71,5 +74,23 @@ final class VCardEncoderTest extends TestCase
 
         $this->expectException(InvalidCardException::class);
         new VCardEncoder()->encode($card);
+    }
+
+    public function testATitleSharesTheGroupOfItsOrganization(): void
+    {
+        $card = new Card(
+            organizations: ['o1' => new Organization('ACME', [new OrgUnit('Sales', extra: ['example.com:x' => 1])])],
+            titles: ['t1' => new Title('Lead', Title::KIND_ROLE, 'o1'), 't2' => new Title('Chair', 'example.com:chair')],
+        );
+
+        $result = new VCardEncoder()->encode($card);
+
+        self::assertStringContainsString("item1.ORG;PROP-ID=o1:ACME;Sales\r\n", $result->value);
+        self::assertStringContainsString("item1.ROLE;PROP-ID=t1:Lead\r\n", $result->value);
+        self::assertStringContainsString("TITLE;PROP-ID=t2:Chair\r\n", $result->value);
+        self::assertSame([
+            '/titles/t2/kind: vCard has no title of kind "example.com:chair", wrote a TITLE',
+            '/organizations/o1/units/0: properties of objects in arrays cannot be written to vCard, left them out',
+        ], array_map(strval(...), $result->issues));
     }
 }

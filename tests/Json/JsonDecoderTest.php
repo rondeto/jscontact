@@ -180,14 +180,14 @@ final class JsonDecoderTest extends TestCase
         $result = $this->decode([
             'futureProperty' => ['a' => 1],
             'example.com:flag' => true,
-            'organizations' => ['o1' => ['name' => 'ACME']],
+            'localizations' => ['fr' => ['name/full' => 'ACME']],
             'emails' => ['e1' => ['address' => 'a@example.com', 'example.com:verified' => true]],
         ]);
 
         self::assertEquals([
             'futureProperty' => (object) ['a' => 1],
             'example.com:flag' => true,
-            'organizations' => (object) ['o1' => (object) ['name' => 'ACME']],
+            'localizations' => (object) ['fr' => (object) ['name/full' => 'ACME']],
         ], $result->value->extra);
         self::assertSame(['example.com:verified' => true], $result->value->emails['e1']->extra ?? null);
         self::assertSame([], $result->issues);
@@ -195,12 +195,12 @@ final class JsonDecoderTest extends TestCase
 
     public function testInvalidPropertyNamesAreDropped(): void
     {
-        $result = $this->decode(['Emails' => [], 'Organizations' => [], 'extra' => 1, 'not-a-name' => 1]);
+        $result = $this->decode(['Emails' => [], 'Localizations' => [], 'extra' => 1, 'not-a-name' => 1]);
 
         self::assertSame([], $result->value->extra);
         $this->assertIssues([
             '/Emails: property names are case-sensitive, ignored the property',
-            '/Organizations: property names are case-sensitive, ignored the property',
+            '/Localizations: property names are case-sensitive, ignored the property',
             '/extra: "extra" is a reserved property name, ignored the property',
             '/not-a-name: not a valid property name, ignored the property',
         ], $result);

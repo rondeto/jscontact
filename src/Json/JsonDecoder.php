@@ -17,7 +17,10 @@ use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
+use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\Validation\Registry;
@@ -104,6 +107,8 @@ final readonly class JsonDecoder
             members: $object->set('members'),
             name: null === $name ? null : $this->name($name),
             nicknames: $this->map($object, 'nicknames', 'Nickname', $this->nickname(...)),
+            organizations: $this->map($object, 'organizations', 'Organization', $this->organization(...)),
+            titles: $this->map($object, 'titles', 'Title', $this->title(...)),
             emails: $this->map($object, 'emails', 'EmailAddress', $this->email(...)),
             phones: $this->map($object, 'phones', 'Phone', $this->phone(...)),
             addresses: $this->map($object, 'addresses', 'Address', $this->address(...)),
@@ -149,6 +154,53 @@ final readonly class JsonDecoder
             name: $name,
             contexts: $object->set('contexts', Registry::CONTEXTS),
             pref: $object->pref(),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    private function organization(JsonObject $object): Organization
+    {
+        $units = [];
+        foreach ($object->objectList('units') as $index => $unit) {
+            $name = $unit->isOfType('OrgUnit') ? $unit->requiredString('name') : null;
+            if (null === $name) {
+                $object->warn('units/'.$index, 'ignored the unit');
+                continue;
+            }
+
+            $units[] = new OrgUnit(
+                name: $name,
+                sortAs: $unit->string('sortAs'),
+                vCardName: $unit->string('vCardName'),
+                vCardParams: $unit->vCardParams(),
+                extra: $unit->extra(),
+            );
+        }
+
+        return new Organization(
+            name: $object->string('name'),
+            units: $units,
+            sortAs: $object->string('sortAs'),
+            contexts: $object->set('contexts', Registry::CONTEXTS),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    private function title(JsonObject $object): ?Title
+    {
+        $name = $object->requiredString('name');
+        if (null === $name) {
+            return null;
+        }
+
+        return new Title(
+            name: $name,
+            kind: $object->enum('kind', Registry::TITLE_KINDS),
+            organizationId: $object->string('organizationId'),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
             extra: $object->extra(),

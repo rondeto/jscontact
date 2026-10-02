@@ -39,7 +39,7 @@ Changes:
 - Figure 20: `vCardName` is set to `"socialprofile"`, which section 2.7.5 allows, so that the property converts back
   to SOCIALPROFILE.
 - Figure 24: no `uid`, since the vCard has no UID and RFC 9982 forbids generating one.
-- Figure 40: the group is kept in `vCardParams`, which section 2.3.9 allows, so that it survives a round trip.
+- Figures 27 and 40: the group is kept in `vCardParams`, which section 2.3.9 allows, so that it survives a round trip.
 
 `tests/VCard/Rfc9555JsonToVCardTest.php` also uses Figures 48 to 53. Figure 53 follows
 [erratum 8786](https://www.rfc-editor.org/errata/eid8786): the street number is the 11th ADR component, and the
