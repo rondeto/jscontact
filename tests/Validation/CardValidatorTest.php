@@ -14,6 +14,7 @@ use Rondeto\JSContact\Model\Calendar;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
@@ -23,8 +24,10 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Validation\CardValidator;
@@ -146,6 +149,21 @@ final class CardValidatorTest extends TestCase
                 '/media/m1/mediaType: not a media type',
                 '/directories/d1/listAs: must be greater than 0',
                 '/calendars/c1/kind: "freebusy" must be written "freeBusy"',
+            ],
+        ];
+        yield 'languages, relations and personal information' => [
+            new Card(
+                preferredLanguages: ['l1' => new LanguagePref('french!')],
+                relatedTo: ['' => new Relation(['Friend'])],
+                personalInfo: ['p1' => new PersonalInfo('Hobby', 'chess', 'High', 0)],
+            ),
+            [
+                '/preferredLanguages/l1/language: "french!" is not a language tag',
+                '/relatedTo/: a related Card needs a uid',
+                '/relatedTo//relation/Friend: "Friend" must be written "friend"',
+                '/personalInfo/p1/kind: "Hobby" must be written "hobby"',
+                '/personalInfo/p1/level: "High" must be written "high"',
+                '/personalInfo/p1/listAs: must be greater than 0',
             ],
         ];
         yield 'extra' => [

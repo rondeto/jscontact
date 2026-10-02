@@ -276,11 +276,12 @@ final class JsonObject
     }
 
     /**
-     * An Id[Object] map. Entries whose key is not a valid Id are skipped.
+     * An Id[Object] map, or a String[Object] map when $keysAreIds is false. Entries whose key
+     * is not a valid Id, or is empty, are skipped.
      *
      * @return array<array-key, self>
      */
-    public function objectMap(string $name): array
+    public function objectMap(string $name, bool $keysAreIds = true): array
     {
         $value = $this->take($name);
         if (null === $value) {
@@ -297,8 +298,10 @@ final class JsonObject
         foreach (get_object_vars($value) as $id => $item) {
             $id = (string) $id; // PHP turns numeric string keys into integers
             $itemPath = $name.'/'.$this->escape($id);
-            if (!Syntax::isId($id)) {
+            if ($keysAreIds && !Syntax::isId($id)) {
                 $this->warn($itemPath, 'not a valid Id, ignored the entry');
+            } elseif ('' === $id) {
+                $this->warn($itemPath, 'empty key, ignored the entry');
             } elseif (!$item instanceof \stdClass) {
                 $this->warn($itemPath, 'expected an object, ignored the entry');
             } else {

@@ -1,0 +1,5 @@
+{"preferredLanguages": {
+  "LANG-1": {"language": "en", "contexts": {"work": true}, "pref": 1},
+  "LANG-2": {"language": "fr", "contexts": {"work": true}, "pref": 2},
+  "LANG-3": {"language": "fr", "contexts": {"private": true}}
+}}

@@ -15,6 +15,7 @@ use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
@@ -25,8 +26,10 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
@@ -139,6 +142,15 @@ final readonly class JsonDecoder
             directories: $this->map($object, 'directories', 'Directory', fn (JsonObject $directory): ?Directory => null === ($r = $this->resource($directory, Registry::DIRECTORY_KINDS)) || null === $r->kind ? null : new Directory($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $directory->int('listAs'), $r->vCardName, $r->vCardParams, $r->extra)),
             calendars: $this->map($object, 'calendars', 'Calendar', fn (JsonObject $calendar): ?Calendar => null === ($r = $this->resource($calendar, Registry::CALENDAR_KINDS)) || null === $r->kind ? null : new Calendar($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
             schedulingAddresses: $this->map($object, 'schedulingAddresses', 'SchedulingAddress', $this->schedulingAddress(...)),
+            preferredLanguages: $this->map($object, 'preferredLanguages', 'LanguagePref', $this->languagePref(...)),
+            // Keyed by the uid of the related Card, which need not be an Id.
+            relatedTo: $this->map($object, 'relatedTo', 'Relation', static fn (JsonObject $relation): Relation => new Relation(
+                relation: $relation->set('relation', Registry::RELATION_TYPES),
+                vCardName: $relation->string('vCardName'),
+                vCardParams: $relation->vCardParams(),
+                extra: $relation->extra(),
+            ), keysAreIds: false),
+            personalInfo: $this->map($object, 'personalInfo', 'PersonalInfo', $this->personalInfo(...)),
             keywords: $object->set('keywords'),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
@@ -435,6 +447,47 @@ final readonly class JsonDecoder
         );
     }
 
+    private function languagePref(JsonObject $object): ?LanguagePref
+    {
+        $language = $object->requiredString('language');
+        if (null === $language) {
+            return null;
+        }
+
+        return new LanguagePref(
+            language: $language,
+            contexts: $object->set('contexts', Registry::CONTEXTS),
+            pref: $object->pref(),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    private function personalInfo(JsonObject $object): ?PersonalInfo
+    {
+        if (!$object->has('kind')) {
+            $object->warn('kind', 'missing mandatory property');
+        }
+
+        $kind = $object->enum('kind', Registry::PERSONAL_INFO_KINDS);
+        $value = $object->requiredString('value');
+        if (null === $kind || null === $value) {
+            return null;
+        }
+
+        return new PersonalInfo(
+            kind: $kind,
+            value: $value,
+            level: $object->enum('level', Registry::PERSONAL_INFO_LEVELS),
+            listAs: $object->int('listAs'),
+            label: $object->string('label'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
     private function schedulingAddress(JsonObject $object): ?SchedulingAddress
     {
         $uri = $object->requiredString('uri');
@@ -485,13 +538,13 @@ final readonly class JsonDecoder
      *
      * @return array<array-key, T>
      */
-    private function map(JsonObject $card, string $name, string $type, callable $read): array
+    private function map(JsonObject $card, string $name, string $type, callable $read, bool $keysAreIds = true): array
     {
         $map = [];
-        foreach ($card->objectMap($name) as $id => $object) {
+        foreach ($card->objectMap($name, $keysAreIds) as $id => $object) {
             $value = $object->isOfType($type) ? $read($object) : null;
             if (null === $value) {
-                $card->warn($name.'/'.$id, 'ignored the entry');
+                $card->warn($name.'/'.strtr((string) $id, ['~' => '~0', '/' => '~1']), 'ignored the entry');
             } else {
                 $map[$id] = $value;
             }

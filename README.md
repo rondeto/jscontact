@@ -48,17 +48,18 @@ contact data, and for converting between vCard and JSContact.
 | Anniversaries (BDAY, ANNIVERSARY…)               | ✅ Done     |
 | speakToAs (GRAMGENDER, PRONOUNS)                 | ✅ Done     |
 | Media, keys, directories, calendars              | ✅ Done     |
-| Languages, relations, personal information       | ⏳ Planned  |
+| Languages, relations, personal information       | ✅ Done     |
 | Card-level GEO and TZ                            | ⏳ Planned  |
 | Localizations (LANGUAGE and ALTID alternatives)  | ⏳ Planned  |
 
 Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `members`, `name`, `speakToAs`, `nicknames`,
 `organizations`, `titles`, `emails`, `phones`, `addresses`, `onlineServices`, `links`, `media`, `cryptoKeys`,
-`directories`, `calendars`, `schedulingAddresses`, `notes`, `anniversaries`, `keywords`, and
+`directories`, `calendars`, `schedulingAddresses`, `preferredLanguages`, `relatedTo`, `notes`, `anniversaries`,
+`personalInfo`, `keywords`, and
 the RFC 9555 properties `vCardName`, `vCardParams` and `vCardProps`.
 
 Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
-back unchanged. vCard properties that are not converted yet (RELATED, LANG, EXPERTISE…) and vendor extensions are
+back unchanged. vCard properties that are not converted yet (card-level GEO and TZ, localized alternatives…) and vendor extensions are
 kept verbatim in `vCardProps`, as RFC 9555 allows, and written back unchanged.
 
 ## Usage

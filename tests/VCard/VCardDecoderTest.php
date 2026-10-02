@@ -13,12 +13,15 @@ use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
@@ -224,6 +227,33 @@ final class VCardDecoderTest extends TestCase
         self::assertSame([
             '/vCardProps/0: kept KEY verbatim: not a URI',
             '/: ORG-DIRECTORY: INDEX "first" is not a positive integer, kept it in vCardParams',
+        ], array_map(strval(...), $result->issues));
+    }
+
+    public function testLanguagesRelationsAndPersonalInfo(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'LANG;PREF=1:fr-CA',
+            'LANG:Klingon!',
+            'RELATED;TYPE=spouse,kin:urn:uuid:1',
+            'RELATED;TYPE=friend:urn:uuid:1',
+            'item1.HOBBY;LEVEL=Low:chess',
+            'item1.X-ABLabel:Weekends',
+            'EXPERTISE;LEVEL=average;INDEX=one:law',
+            '',
+        ]));
+        $card = $result->value;
+
+        self::assertEquals(['LANG-1' => new LanguagePref('fr-CA', pref: 1)], $card->preferredLanguages);
+        self::assertEquals(['urn:uuid:1' => new Relation(['spouse', 'kin'])], $card->relatedTo);
+        self::assertEquals([
+            'PERSINFO-1' => new PersonalInfo('hobby', 'chess', 'low', label: 'Weekends', vCardParams: ['group' => 'item1']),
+            'PERSINFO-2' => new PersonalInfo('expertise', 'law', 'medium', vCardParams: ['index' => 'one']),
+        ], $card->personalInfo);
+        self::assertSame([
+            '/vCardProps/0: kept LANG verbatim: "Klingon!" is not a language tag',
+            '/vCardProps/1: kept RELATED verbatim: another RELATED property has the same value',
+            '/: EXPERTISE: INDEX "one" is not a positive integer, kept it in vCardParams',
         ], array_map(strval(...), $result->issues));
     }
 

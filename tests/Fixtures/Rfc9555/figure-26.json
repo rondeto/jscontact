@@ -1,0 +1,5 @@
+{"relatedTo": {
+  "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6": {"relation": {"friend": true}},
+  "https://example.com/directory/john.vcf": {"relation": {"contact": true}},
+  "Please contact my deputy John for any inquiries.": {"relation": {}}
+}}

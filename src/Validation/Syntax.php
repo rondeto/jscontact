@@ -29,6 +29,9 @@ final class Syntax
      */
     public const string EMAIL_ADDRESS = '/^[^@\s]+@[^@\s]+$/';
 
+    /** An RFC 5646 language tag, checked loosely: subtags of letters and digits. */
+    public const string LANGUAGE_TAG = '/^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8})*$/';
+
     /** A media type (RFC 6838, section 4.2), parameters allowed. */
     public const string MEDIA_TYPE = '~^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*(\s*;.*)?$~';
 
