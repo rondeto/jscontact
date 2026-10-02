@@ -1,0 +1,7 @@
+{
+  "titles": {
+    "TITLE-1": {"kind": "title", "name": "Research Scientist"},
+    "TITLE-2": {"kind": "role", "name": "Project Leader", "organizationId": "ORG-1", "vCardParams": {"group": "group1"}}
+  },
+  "organizations": {"ORG-1": {"name": "ABC, Inc.", "vCardParams": {"group": "group1"}}}
+}

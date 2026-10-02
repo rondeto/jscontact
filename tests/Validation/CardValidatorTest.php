@@ -17,7 +17,9 @@ use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
+use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Validation\CardValidator;
 use Symfony\Component\Validator\Validation;
 
@@ -95,9 +97,17 @@ final class CardValidatorTest extends TestCase
             new Card(notes: ['n1' => new Note('Hi', author: new Author())]),
             ['/notes/n1/author: an author needs at least one property'],
         ];
+        yield 'organization without name nor units' => [
+            new Card(organizations: ['o1' => new Organization(sortAs: 'ACME')]),
+            ['/organizations/o1: an organization needs a name, units, or both'],
+        ];
+        yield 'title' => [
+            new Card(titles: ['t1' => new Title('Boss', 'Role', 'o1'), 't2' => new Title('', organizationId: 'not valid')]),
+            ['/titles/t1/organizationId: no organization has this Id', '/titles/t2/organizationId: no organization has this Id', '/titles/t1/kind: "Role" must be written "role"', '/titles/t2/name: must not be empty', '/titles/t2/organizationId: not a valid Id'],
+        ];
         yield 'extra' => [
-            new Card(extra: ['uid' => 'x', 'Organizations' => [], 'extra' => 1, 'bad name' => 1, 'organizations' => [], 'example.com:x' => 1]),
-            ['/uid: this property is modeled: set it on the object, not in extra', '/Organizations: must be written "organizations"', '/extra: "extra" is a reserved property name', '/bad name: not a valid property name'],
+            new Card(extra: ['uid' => 'x', 'Localizations' => [], 'extra' => 1, 'bad name' => 1, 'localizations' => [], 'example.com:x' => 1]),
+            ['/uid: this property is modeled: set it on the object, not in extra', '/Localizations: must be written "localizations"', '/extra: "extra" is a reserved property name', '/bad name: not a valid property name'],
         ];
         yield 'nested extra' => [
             new Card(emails: ['e1' => new EmailAddress('a@example.com', extra: ['Label' => 'x', 'example.com:x' => []])]),

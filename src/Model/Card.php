@@ -19,6 +19,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * properties are kept verbatim in $extra, so that nothing is lost.
  */
 #[Constraint\GroupMembers]
+#[Constraint\TitleOrganizations]
 #[Constraint\ExtraProperties(Registry::UNMODELED_CARD_PROPERTIES)]
 final readonly class Card
 {
@@ -38,6 +39,8 @@ final readonly class Card
      * @param string|null                        $kind           null means "individual", the default
      * @param list<string>                       $members        The uid of each member of this group Card
      * @param array<array-key, Nickname>         $nicknames
+     * @param array<array-key, Organization>     $organizations
+     * @param array<array-key, Title>            $titles
      * @param array<array-key, EmailAddress>     $emails
      * @param array<array-key, Phone>            $phones
      * @param array<array-key, Address>          $addresses
@@ -67,6 +70,10 @@ final readonly class Card
         public ?Name $name = null,
         #[Constraint\IdKeys, Assert\Valid]
         public array $nicknames = [],
+        #[Constraint\IdKeys, Assert\Valid]
+        public array $organizations = [],
+        #[Constraint\IdKeys, Assert\Valid]
+        public array $titles = [],
         #[Constraint\IdKeys, Assert\Valid]
         public array $emails = [],
         #[Constraint\IdKeys, Assert\Valid]

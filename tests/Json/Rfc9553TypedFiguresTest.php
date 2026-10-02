@@ -17,7 +17,10 @@ use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
+use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Title;
 
 /**
  * The RFC 9553 figures of the modeled properties, read into the typed model.
@@ -114,6 +117,25 @@ final class Rfc9553TypedFiguresTest extends TestCase
     public function testFigure21Nicknames(): void
     {
         self::assertEquals(['k391' => new Nickname('Johnny')], $this->figure(21)->nicknames);
+    }
+
+    public function testFigure22Organizations(): void
+    {
+        self::assertEquals(
+            ['o1' => new Organization('ABC, Inc.', [new OrgUnit('North American Division'), new OrgUnit('Marketing')], 'ABC')],
+            $this->figure(22)->organizations,
+        );
+    }
+
+    public function testFigure24Titles(): void
+    {
+        $card = $this->figure(24);
+
+        self::assertEquals([
+            'le9' => new Title('Research Scientist', Title::KIND_TITLE),
+            'k2' => new Title('Project Leader', Title::KIND_ROLE, 'o2'),
+        ], $card->titles);
+        self::assertEquals(['o2' => new Organization('ABC, Inc.')], $card->organizations);
     }
 
     public function testFigure25Emails(): void

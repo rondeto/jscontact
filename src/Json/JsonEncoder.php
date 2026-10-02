@@ -15,7 +15,10 @@ use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
+use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\InvalidCardException;
@@ -71,6 +74,8 @@ final readonly class JsonEncoder
             'members' => $this->set($card->members),
             'name' => null === $card->name ? null : $this->name($card->name),
             'nicknames' => $this->map($card->nicknames, $this->nickname(...)),
+            'organizations' => $this->map($card->organizations, $this->organization(...)),
+            'titles' => $this->map($card->titles, $this->title(...)),
             'emails' => $this->map($card->emails, $this->email(...)),
             'phones' => $this->map($card->phones, $this->phone(...)),
             'addresses' => $this->map($card->addresses, $this->address(...)),
@@ -119,6 +124,39 @@ final readonly class JsonEncoder
             'vCardName' => $nickname->vCardName,
             'vCardParams' => $this->vCardParams($nickname->vCardParams),
         ], $nickname->extra);
+    }
+
+    private function organization(Organization $organization): \stdClass
+    {
+        return $this->object([
+            'name' => $organization->name,
+            'units' => $this->list($organization->units, $this->orgUnit(...)),
+            'sortAs' => $organization->sortAs,
+            'contexts' => $this->set($organization->contexts),
+            'vCardName' => $organization->vCardName,
+            'vCardParams' => $this->vCardParams($organization->vCardParams),
+        ], $organization->extra);
+    }
+
+    private function orgUnit(OrgUnit $unit): \stdClass
+    {
+        return $this->object([
+            'name' => $unit->name,
+            'sortAs' => $unit->sortAs,
+            'vCardName' => $unit->vCardName,
+            'vCardParams' => $this->vCardParams($unit->vCardParams),
+        ], $unit->extra);
+    }
+
+    private function title(Title $title): \stdClass
+    {
+        return $this->object([
+            'name' => $title->name,
+            'kind' => $title->kind,
+            'organizationId' => $title->organizationId,
+            'vCardName' => $title->vCardName,
+            'vCardParams' => $this->vCardParams($title->vCardParams),
+        ], $title->extra);
     }
 
     private function email(EmailAddress $email): \stdClass

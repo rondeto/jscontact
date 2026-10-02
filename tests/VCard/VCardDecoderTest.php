@@ -10,6 +10,9 @@ use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Nickname;
+use Rondeto\JSContact\Model\Organization;
+use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\VCard\VCardDecoder;
@@ -99,17 +102,40 @@ final class VCardDecoderTest extends TestCase
         ]));
 
         self::assertSame('urn:uuid:1', $result->value->uid);
-        self::assertSame(['uid', 'rev', 'kind', 'prodid', 'title', 'title'], array_map(static fn (VCardProperty $property): string => $property->name, $result->value->vCardProps));
+        self::assertSame('Boss', $result->value->titles['TITLE-1']->name ?? null);
+        self::assertSame(['uid', 'rev', 'kind', 'prodid', 'title'], array_map(static fn (VCardProperty $property): string => $property->name, $result->value->vCardProps));
         self::assertSame([
             '/: line 11 is not a vCard property, ignored it',
             '/vCardProps/0: kept UID verbatim: more than one UID property',
             '/vCardProps/1: kept REV verbatim: "yesterday" is not a valid REV value',
             '/vCardProps/2: kept KIND verbatim: "x-robot" is not a valid KIND value',
             '/vCardProps/3: kept PRODID verbatim: the Card has no place for its parameters or group',
-            '/vCardProps/5: kept TITLE verbatim: localized alternatives (ALTID with LANGUAGE) are not converted yet',
+            '/vCardProps/4: kept TITLE verbatim: localized alternatives (ALTID with LANGUAGE) are not converted yet',
             '/: EMAIL: PROP-ID "a b" is not a valid or unique Id, generated another key',
             '/emails/EMAIL-1: PREF "0" is not between 1 and 100, ignored it',
         ], array_map(strval(...), $result->issues));
+    }
+
+    public function testOrganizationsAndTitles(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'ORG:;Research',
+            'ORG:ACME;Sales;',
+            'ORG:ACME;;Sales',
+            'item1.ORG:A',
+            'item1.ORG:B',
+            'item1.TITLE;TYPE=work:Boss',
+            '',
+        ]));
+        $card = $result->value;
+
+        self::assertEquals(new Organization(units: [new OrgUnit('Research')]), $card->organizations['ORG-1'] ?? null);
+        self::assertEquals(new Organization('ACME', [new OrgUnit('Sales')]), $card->organizations['ORG-2'] ?? null);
+        // The third ORG is kept verbatim but still takes its position.
+        self::assertSame(['ORG-1', 'ORG-2', 'ORG-4', 'ORG-5'], array_keys($card->organizations));
+        // Two organizations in its group: the title's organization is unknown.
+        self::assertEquals(new Title('Boss', Title::KIND_TITLE, vCardParams: ['type' => 'work', 'group' => 'item1']), $card->titles['TITLE-1'] ?? null);
+        self::assertSame(['/vCardProps/0: kept ORG verbatim: an organizational unit has no name'], array_map(strval(...), $result->issues));
     }
 
     public function testRepeatedValueParametersAreReported(): void

@@ -16,7 +16,7 @@ final class Registry
      * Card::$extra.
      */
     public const array UNMODELED_CARD_PROPERTIES = [
-        'relatedTo', 'organizations', 'speakToAs', 'titles', 'preferredLanguages', 'calendars',
+        'relatedTo', 'speakToAs', 'preferredLanguages', 'calendars',
         'schedulingAddresses', 'cryptoKeys', 'directories', 'media', 'localizations',
         'anniversaries', 'personalInfo',
     ];
@@ -35,6 +35,8 @@ final class Registry
     public const array PHONE_FEATURES = ['mobile', 'voice', 'text', 'video', 'main-number', 'textphone', 'fax', 'pager'];
 
     public const array LINK_KINDS = ['contact'];
+
+    public const array TITLE_KINDS = ['title', 'role'];
 
     public const array PHONETIC_SYSTEMS = ['ipa', 'jyut', 'piny'];
 

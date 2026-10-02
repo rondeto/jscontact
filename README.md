@@ -44,13 +44,20 @@ contact data, and for converting between vCard and JSContact.
 | Tooling and CI                                   | ✅ Done     |
 | Model and JSON: core properties                  | ✅ Done     |
 | vCard ⇄ JSContact: core properties               | ✅ Done     |
-| Full RFC 9553 / 9554 / 9555 coverage             | ⏳ Planned  |
+| Organizations and titles (ORG, TITLE, ROLE)      | ✅ Done     |
+| Anniversaries (BDAY, ANNIVERSARY…)               | ⏳ Planned  |
+| speakToAs (GRAMGENDER, PRONOUNS)                 | ⏳ Planned  |
+| Media, keys, directories, calendars              | ⏳ Planned  |
+| Languages, relations, personal information       | ⏳ Planned  |
+| Card-level GEO and TZ                            | ⏳ Planned  |
+| Localizations (LANGUAGE and ALTID alternatives)  | ⏳ Planned  |
 
-Core properties: `uid`, `prodId`, `kind`, `members`, `name`, `nicknames`, `emails`, `phones`,
-`addresses`, `onlineServices`, `links`, `notes`, `keywords`.
+Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `members`, `name`, `nicknames`,
+`organizations`, `titles`, `emails`, `phones`, `addresses`, `onlineServices`, `links`, `notes`, `keywords`, and
+the RFC 9555 properties `vCardName`, `vCardParams` and `vCardProps`.
 
 Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
-back unchanged. vCard properties that are not converted yet (ORG, TITLE, BDAY, PHOTO…) and vendor extensions are
+back unchanged. vCard properties that are not converted yet (BDAY, PHOTO, KEY…) and vendor extensions are
 kept verbatim in `vCardProps`, as RFC 9555 allows, and written back unchanged.
 
 ## Usage

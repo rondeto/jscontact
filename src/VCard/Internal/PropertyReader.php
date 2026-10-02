@@ -71,6 +71,16 @@ final class PropertyReader
     }
 
     /**
+     * All values of a parameter, without marking it as read.
+     *
+     * @return list<string>
+     */
+    public function peekAll(string $name): array
+    {
+        return $this->parameters[$name] ?? [];
+    }
+
+    /**
      * The first value of a parameter, marking the parameter as read.
      */
     public function parameter(string $name): ?string

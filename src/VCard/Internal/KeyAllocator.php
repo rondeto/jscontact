@@ -10,7 +10,8 @@ namespace Rondeto\JSContact\VCard\Internal;
  * A valid PROP-ID is used as is (RFC 9555, section 2.3.18). Otherwise, the key is named
  * after the vCard property and its position among the properties of the same kind, as in
  * the examples of RFC 9555: "EMAIL-1", "EMAIL-2"… Positions count every property of the
- * kind, with or without PROP-ID, so that a key does not depend on the other properties.
+ * kind, with or without PROP-ID, converted or not, so that a key does not depend on the
+ * other properties.
  *
  * @internal
  */
@@ -45,8 +46,8 @@ final class KeyAllocator
     }
 
     /**
-     * Counts a property that has its own PROP-ID, so that the positions of the others do
-     * not change whether it has one or not.
+     * Counts a property that gets no generated key (it has its own PROP-ID, or is kept
+     * verbatim), so that the positions of the others do not depend on it.
      */
     public function skip(string $prefix): void
     {
