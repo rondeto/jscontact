@@ -10,9 +10,13 @@ use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
+use Rondeto\JSContact\Model\Calendar;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\CryptoKey;
+use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
@@ -23,6 +27,7 @@ use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
@@ -129,6 +134,11 @@ final readonly class JsonDecoder
             links: $this->map($object, 'links', 'Link', $this->link(...)),
             notes: $this->map($object, 'notes', 'Note', $this->note(...)),
             anniversaries: $this->map($object, 'anniversaries', 'Anniversary', $this->anniversary(...)),
+            media: $this->map($object, 'media', 'Media', fn (JsonObject $media): ?Media => null === ($r = $this->resource($media, Registry::MEDIA_KINDS)) || null === $r->kind ? null : new Media($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
+            cryptoKeys: $this->map($object, 'cryptoKeys', 'CryptoKey', fn (JsonObject $key): ?CryptoKey => null === ($r = $this->resource($key, null)) ? null : new CryptoKey($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
+            directories: $this->map($object, 'directories', 'Directory', fn (JsonObject $directory): ?Directory => null === ($r = $this->resource($directory, Registry::DIRECTORY_KINDS)) || null === $r->kind ? null : new Directory($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $directory->int('listAs'), $r->vCardName, $r->vCardParams, $r->extra)),
+            calendars: $this->map($object, 'calendars', 'Calendar', fn (JsonObject $calendar): ?Calendar => null === ($r = $this->resource($calendar, Registry::CALENDAR_KINDS)) || null === $r->kind ? null : new Calendar($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
+            schedulingAddresses: $this->map($object, 'schedulingAddresses', 'SchedulingAddress', $this->schedulingAddress(...)),
             keywords: $object->set('keywords'),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
@@ -389,6 +399,54 @@ final readonly class JsonDecoder
             month: $object->int('month'),
             day: $object->int('day'),
             calendarScale: $object->string('calendarScale'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    /**
+     * The properties of the Resource type (RFC 9553, section 1.4.4).
+     *
+     * @param list<string>|null $kinds Registered kinds, when the kind is mandatory; null when it is optional and open
+     */
+    private function resource(JsonObject $object, ?array $kinds): ?ResourceFields
+    {
+        $uri = $object->requiredString('uri');
+        if (null !== $kinds && !$object->has('kind')) {
+            $object->warn('kind', 'missing mandatory property');
+        }
+
+        $kind = null === $kinds ? $object->string('kind') : $object->enum('kind', $kinds);
+        if (null === $uri) {
+            return null;
+        }
+
+        return new ResourceFields(
+            uri: $uri,
+            kind: $kind,
+            mediaType: $object->string('mediaType'),
+            contexts: $object->set('contexts', Registry::CONTEXTS),
+            pref: $object->pref(),
+            label: $object->string('label'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    private function schedulingAddress(JsonObject $object): ?SchedulingAddress
+    {
+        $uri = $object->requiredString('uri');
+        if (null === $uri) {
+            return null;
+        }
+
+        return new SchedulingAddress(
+            uri: $uri,
+            contexts: $object->set('contexts', Registry::CONTEXTS),
+            pref: $object->pref(),
+            label: $object->string('label'),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
             extra: $object->extra(),

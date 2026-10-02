@@ -1,0 +1,4 @@
+{"schedulingAddresses": {
+  "SCHEDULING-1": {"uri": "mailto:janedoe@example.com", "pref": 1},
+  "SCHEDULING-2": {"uri": "https://example.com/calendar/jdoe"}
+}}

@@ -8,9 +8,13 @@ use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
+use Rondeto\JSContact\Model\Calendar;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\CryptoKey;
+use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
@@ -20,6 +24,7 @@ use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
@@ -92,6 +97,11 @@ final readonly class JsonEncoder
             'links' => $this->map($card->links, $this->link(...)),
             'notes' => $this->map($card->notes, $this->note(...)),
             'anniversaries' => $this->map($card->anniversaries, $this->anniversary(...)),
+            'media' => $this->map($card->media, $this->resource(...)),
+            'cryptoKeys' => $this->map($card->cryptoKeys, $this->resource(...)),
+            'directories' => $this->map($card->directories, $this->resource(...)),
+            'calendars' => $this->map($card->calendars, $this->resource(...)),
+            'schedulingAddresses' => $this->map($card->schedulingAddresses, $this->resource(...)),
             'keywords' => $this->set($card->keywords),
             'vCardProps' => [] === $card->vCardProps ? null : array_map($this->vCardProperty(...), $card->vCardProps),
             'vCardName' => $card->vCardName,
@@ -277,6 +287,24 @@ final readonly class JsonEncoder
             'vCardName' => $anniversary->vCardName,
             'vCardParams' => $this->vCardParams($anniversary->vCardParams),
         ], $anniversary->extra);
+    }
+
+    /**
+     * A Resource (RFC 9553, section 1.4.4), or a SchedulingAddress, which has a subset of its properties.
+     */
+    private function resource(Media|CryptoKey|Directory|Calendar|SchedulingAddress $resource): \stdClass
+    {
+        return $this->object([
+            'kind' => $resource instanceof SchedulingAddress ? null : $resource->kind,
+            'uri' => $resource->uri,
+            'mediaType' => $resource instanceof SchedulingAddress ? null : $resource->mediaType,
+            'contexts' => $this->set($resource->contexts),
+            'pref' => $resource->pref,
+            'label' => $resource->label,
+            'listAs' => $resource instanceof Directory ? $resource->listAs : null,
+            'vCardName' => $resource->vCardName,
+            'vCardParams' => $this->vCardParams($resource->vCardParams),
+        ], $resource->extra);
     }
 
     private function note(Note $note): \stdClass

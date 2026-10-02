@@ -8,8 +8,10 @@ use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
@@ -152,5 +154,30 @@ final class VCardEncoderTest extends TestCase
             '/speakToAs/grammaticalGender: vCard 3.0 does not define GRAMGENDER, wrote it anyway',
             '/speakToAs/pronouns/p1: vCard 3.0 does not define PRONOUNS, wrote it anyway',
         ], array_map(strval(...), $result->issues));
+    }
+
+    public function testResources(): void
+    {
+        $card = new Card(
+            media: [
+                'm1' => new Media('data:image/jpeg;base64,/9j/4AAQ', Media::KIND_PHOTO),
+                'm2' => new Media('https://example.com/a,b.png', Media::KIND_LOGO, 'image/png'),
+                'm3' => new Media('https://example.com/v.mp4', 'example.com:video'),
+            ],
+            cryptoKeys: ['k1' => new CryptoKey('https://example.com/key.asc', 'example.com:pgp')],
+        );
+
+        $v40 = new VCardEncoder()->encode($card);
+        self::assertStringContainsString("PHOTO;PROP-ID=m1:data:image/jpeg;base64,/9j/4AAQ\r\n", $v40->value);
+        self::assertStringContainsString("LOGO;MEDIATYPE=image/png;PROP-ID=m2:https://example.com/a,b.png\r\n", $v40->value);
+        self::assertSame([
+            '/media/m3: vCard has no media of kind "example.com:video", wrote it as JSPROP',
+            '/cryptoKeys/k1/kind: vCard has no kind of key, wrote it as JSPROP',
+        ], array_map(strval(...), $v40->issues));
+        self::assertEquals($card, new VCardDecoder()->decode($v40->value)[0]->value ?? null);
+
+        $v30 = new VCardEncoder()->encode(new Card(media: ['m1' => $card->media['m1'], 'm2' => $card->media['m2']]), VCardVersion::V30);
+        self::assertStringContainsString("PHOTO;ENCODING=b;PROP-ID=m1;TYPE=JPEG:/9j/4AAQ\r\n", $v30->value);
+        self::assertStringContainsString("LOGO;VALUE=uri;PROP-ID=m2;TYPE=PNG:https://example.com/a,b.png\r\n", $v30->value);
     }
 }

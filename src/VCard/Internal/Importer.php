@@ -12,9 +12,13 @@ use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
+use Rondeto\JSContact\Model\Calendar;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\CryptoKey;
+use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Nickname;
@@ -25,6 +29,7 @@ use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
@@ -32,6 +37,7 @@ use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\Syntax;
 use Sabre\VObject\Component\VCard;
 use Sabre\VObject\Property;
+use Sabre\VObject\Property\Binary;
 use Sabre\VObject\Property\Unknown;
 
 /**
@@ -65,10 +71,25 @@ final class Importer
         'DEATHDATE' => ['anniversaries', 'ANNIVERSARY'],
         'ANNIVERSARY' => ['anniversaries', 'ANNIVERSARY'],
         'PRONOUNS' => ['pronouns', 'PRONOUNS'],
+        'PHOTO' => ['media', 'PHOTO'],
+        'LOGO' => ['media', 'LOGO'],
+        'SOUND' => ['media', 'SOUND'],
+        'KEY' => ['cryptoKeys', 'KEY'],
+        'SOURCE' => ['directories', 'ENTRY'],
+        'ORG-DIRECTORY' => ['directories', 'DIRECTORY'],
+        'CALURI' => ['calendars', 'CAL'],
+        'FBURL' => ['calendars', 'FBURL'],
+        'CALADRURI' => ['schedulingAddresses', 'SCHEDULING'],
     ];
 
     /** vCard properties whose JSContact object has a label property, set from X-ABLabel. */
-    private const array LABELED = ['EMAIL', 'TEL', 'IMPP', 'SOCIALPROFILE', 'URL', 'CONTACT-URI'];
+    private const array LABELED = [
+        'EMAIL', 'TEL', 'IMPP', 'SOCIALPROFILE', 'URL', 'CONTACT-URI', 'PHOTO', 'LOGO', 'SOUND', 'KEY', 'SOURCE',
+        'ORG-DIRECTORY', 'CALURI', 'FBURL', 'CALADRURI',
+    ];
+
+    /** Resources whose format vCard 3.0 gives as a TYPE value, or embeds as binary. */
+    private const array MEDIA = ['PHOTO', 'LOGO', 'SOUND', 'KEY'];
 
     /** TEL TYPE values and the Phone features they convert to (RFC 9555, Table 3). */
     private const array PHONE_FEATURES = [
@@ -135,6 +156,21 @@ final class Importer
     private array $pronouns = [];
 
     private ?PropertyReader $grammaticalGender = null;
+
+    /** @var array<string, Media> */
+    private array $media = [];
+
+    /** @var array<string, CryptoKey> */
+    private array $cryptoKeys = [];
+
+    /** @var array<string, Directory> */
+    private array $directories = [];
+
+    /** @var array<string, Calendar> */
+    private array $calendars = [];
+
+    /** @var array<string, SchedulingAddress> */
+    private array $schedulingAddresses = [];
 
     /** @var array<string, Anniversary> */
     private array $anniversaries = [];
@@ -237,6 +273,11 @@ final class Importer
             links: $this->links,
             notes: $this->notes,
             anniversaries: $this->anniversaries,
+            media: $this->media,
+            cryptoKeys: $this->cryptoKeys,
+            directories: $this->directories,
+            calendars: $this->calendars,
+            schedulingAddresses: $this->schedulingAddresses,
             keywords: array_values(array_unique($this->keywords)),
             vCardProps: $this->vCardProps,
         );
@@ -273,6 +314,7 @@ final class Importer
             'BDAY', 'DEATHDATE', 'ANNIVERSARY' => $this->dates[] = $property,
             'GRAMGENDER' => $this->grammaticalGender($property),
             'PRONOUNS' => $this->pronoun($property),
+            'PHOTO', 'LOGO', 'SOUND', 'KEY', 'SOURCE', 'ORG-DIRECTORY', 'CALURI', 'FBURL', 'CALADRURI' => $this->resource($property),
             'BIRTHPLACE', 'DEATHPLACE' => $this->places[$property->name][] = $property,
             default => $this->raw($property),
         };
@@ -628,6 +670,79 @@ final class Importer
     }
 
     /**
+     * PHOTO, LOGO and SOUND convert to media, KEY to a crypto key, SOURCE and ORG-DIRECTORY
+     * to directories, CALURI and FBURL to calendars, CALADRURI to a scheduling address
+     * (RFC 9555, sections 2.4.3, 2.5.7, 2.9.2, 2.10.4, 2.11.7, 2.12.1 and 2.13).
+     */
+    private function resource(PropertyReader $property): void
+    {
+        $mediaType = $property->parameter('MEDIATYPE');
+        $uri = $this->resourceUri($property, $mediaType);
+        if (null === $uri) {
+            $this->raw($property, 'not a URI');
+
+            return;
+        }
+
+        $listAs = null;
+        if ('ORG-DIRECTORY' === $property->name && null !== ($index = $property->peek('INDEX'))) {
+            if (1 === preg_match('/^[1-9]\d*$/', $index)) {
+                $listAs = (int) $property->parameter('INDEX');
+            } else {
+                $this->issues->add('', \sprintf('ORG-DIRECTORY: INDEX "%s" is not a positive integer, kept it in vCardParams', $index));
+            }
+        }
+
+        $common = $this->common($property);
+        $key = $common->key;
+        match ($property->name) {
+            'PHOTO', 'LOGO', 'SOUND' => $this->media[$key] = new Media($uri, strtolower($property->name), $mediaType, $common->contexts, $common->pref, $common->label, vCardParams: $common->vCardParams),
+            'KEY' => $this->cryptoKeys[$key] = new CryptoKey($uri, null, $mediaType, $common->contexts, $common->pref, $common->label, vCardParams: $common->vCardParams),
+            'SOURCE', 'ORG-DIRECTORY' => $this->directories[$key] = new Directory($uri, 'SOURCE' === $property->name ? Directory::KIND_ENTRY : Directory::KIND_DIRECTORY, $mediaType, $common->contexts, $common->pref, $common->label, $listAs, vCardParams: $common->vCardParams),
+            'CALURI', 'FBURL' => $this->calendars[$key] = new Calendar($uri, 'CALURI' === $property->name ? Calendar::KIND_CALENDAR : Calendar::KIND_FREE_BUSY, $mediaType, $common->contexts, $common->pref, $common->label, vCardParams: $common->vCardParams),
+            default => $this->schedulingAddresses[$key] = new SchedulingAddress($uri, $common->contexts, $common->pref, $common->label, vCardParams: $common->vCardParams),
+        };
+    }
+
+    /**
+     * The URI of a resource. vCard 3.0 and 2.1 embed media as binary, with their format as a
+     * TYPE value: they become "data:" URIs. A format given for a URI becomes its media type.
+     *
+     * @param-out string|null $mediaType
+     */
+    private function resourceUri(PropertyReader $property, ?string &$mediaType): ?string
+    {
+        $format = null;
+        if (\in_array($property->name, self::MEDIA, true)) {
+            foreach ($property->unreadTypes() as $type) {
+                if (null !== MediaTypes::fromFormat($type)) {
+                    $format = $type;
+                    $property->takeType($type);
+                    break;
+                }
+            }
+        }
+
+        $encoding = strtolower($property->peek('ENCODING') ?? '');
+        if ($property->property instanceof Binary || \in_array($encoding, ['b', 'base64'], true)) {
+            // sabre/vobject workaround: sabre reads PHOTO and LOGO as binary, but KEY and SOUND
+            // as text, still in base64.
+            $bytes = $property->property instanceof Binary ? $property->property->getValue() : base64_decode(preg_replace('/\s+/', '', $property->text()) ?? '', true);
+            $type = null === $format ? 'application/octet-stream' : MediaTypes::fromFormat($format);
+
+            return \is_string($bytes) ? 'data:'.$type.';base64,'.base64_encode($bytes) : null;
+        }
+
+        if (null !== $format) {
+            $mediaType ??= MediaTypes::fromFormat($format);
+        }
+
+        $uri = trim($property->text());
+
+        return 1 === preg_match(Syntax::URI, $uri) ? $uri : null;
+    }
+
+    /**
      * GRAMGENDER converts to the grammatical gender (RFC 9555, section 2.5.4). Several of them
      * are versions in different languages, which convert to localizations: they are not
      * converted yet.
@@ -818,6 +933,11 @@ final class Importer
             'titles' => isset($this->titles[$key]),
             'anniversaries' => isset($this->anniversaries[$key]),
             'pronouns' => isset($this->pronouns[$key]),
+            'media' => isset($this->media[$key]),
+            'cryptoKeys' => isset($this->cryptoKeys[$key]),
+            'directories' => isset($this->directories[$key]),
+            'calendars' => isset($this->calendars[$key]),
+            'schedulingAddresses' => isset($this->schedulingAddresses[$key]),
             default => isset($this->notes[$key]),
         };
     }
@@ -1029,7 +1149,9 @@ final class Importer
                 nicknames: $card->nicknames, organizations: $card->organizations, titles: $card->titles,
                 emails: $card->emails, phones: $card->phones,
                 addresses: $card->addresses, onlineServices: $card->onlineServices, links: $card->links,
-                notes: $card->notes, anniversaries: $card->anniversaries, keywords: $card->keywords, vCardProps: $this->vCardProps,
+                notes: $card->notes, anniversaries: $card->anniversaries, media: $card->media,
+                cryptoKeys: $card->cryptoKeys, directories: $card->directories, calendars: $card->calendars,
+                schedulingAddresses: $card->schedulingAddresses, keywords: $card->keywords, vCardProps: $this->vCardProps,
             );
 
             return new Result($card, [...$this->issues->all(), ...$this->validator->validate($card)]);

@@ -9,9 +9,12 @@ use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Json\JsonEncoder;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\Anniversary;
+use Rondeto\JSContact\Model\Calendar;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
@@ -37,7 +40,7 @@ use Sabre\VObject\Reader;
 final class Exporter
 {
     /** vCard 4.0 properties that vCard 3.0 does not define. */
-    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI', 'ANNIVERSARY', 'DEATHDATE', 'BIRTHPLACE', 'DEATHPLACE', 'GRAMGENDER', 'PRONOUNS'];
+    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI', 'ANNIVERSARY', 'DEATHDATE', 'BIRTHPLACE', 'DEATHPLACE', 'GRAMGENDER', 'PRONOUNS', 'ORG-DIRECTORY'];
 
     /** Phone features and the TEL TYPE values they convert to (RFC 9555, Table 3). */
     private const array PHONE_TYPES = [
@@ -123,6 +126,7 @@ final class Exporter
 
         $this->anniversaries($card);
         $this->speakToAs($card);
+        $this->resources($card);
 
         $organizationGroups = $this->organizationGroups($card);
         foreach ($card->organizations as $key => $organization) {
@@ -387,6 +391,142 @@ final class Exporter
     }
 
     /**
+     * Media, crypto keys, directories, calendars and scheduling addresses (RFC 9555, sections
+     * 2.4.3, 2.5.7, 2.9.2, 2.10.4, 2.11.7, 2.12.1 and 2.13). Kinds vCard has no property for
+     * are written as JSPROP.
+     */
+    private function resources(Card $card): void
+    {
+        $unwritten = [];
+        foreach ($card->media as $key => $media) {
+            $name = match ($media->kind) {
+                Media::KIND_PHOTO => 'PHOTO',
+                Media::KIND_LOGO => 'LOGO',
+                Media::KIND_SOUND => 'SOUND',
+                default => null,
+            };
+            if (null === $name) {
+                $this->issues->add('/media/'.$key, \sprintf('vCard has no media of kind "%s", wrote it as JSPROP', $media->kind));
+                $unwritten[$key] = $media;
+                continue;
+            }
+
+            $this->resource($name, (string) $key, $media->uri, $media->mediaType, $media->contexts, $media->pref, $media->label, $media->vCardParams, '/media/'.$key);
+        }
+
+        $this->unwrittenEntries('media', new Card(media: $unwritten), \count($card->media));
+
+        foreach ($card->cryptoKeys as $key => $cryptoKey) {
+            $this->resource('KEY', (string) $key, $cryptoKey->uri, $cryptoKey->mediaType, $cryptoKey->contexts, $cryptoKey->pref, $cryptoKey->label, $cryptoKey->vCardParams, '/cryptoKeys/'.$key);
+            if (null !== $cryptoKey->kind) {
+                $this->issues->add('/cryptoKeys/'.$key.'/kind', 'vCard has no kind of key, wrote it as JSPROP');
+                $this->jsProp('cryptoKeys/'.$this->escape((string) $key).'/kind', $cryptoKey->kind);
+            }
+        }
+
+        $unwritten = [];
+        foreach ($card->directories as $key => $directory) {
+            $name = match ($directory->kind) {
+                Directory::KIND_ENTRY => 'SOURCE',
+                Directory::KIND_DIRECTORY => 'ORG-DIRECTORY',
+                default => null,
+            };
+            if (null === $name) {
+                $this->issues->add('/directories/'.$key, \sprintf('vCard has no directory of kind "%s", wrote it as JSPROP', $directory->kind));
+                $unwritten[$key] = $directory;
+                continue;
+            }
+
+            $params = null === $directory->listAs ? [] : ['INDEX' => (string) $directory->listAs];
+            $this->resource($name, (string) $key, $directory->uri, $directory->mediaType, $directory->contexts, $directory->pref, $directory->label, $directory->vCardParams, '/directories/'.$key, $params);
+        }
+
+        $this->unwrittenEntries('directories', new Card(directories: $unwritten), \count($card->directories));
+
+        $unwritten = [];
+        foreach ($card->calendars as $key => $calendar) {
+            $name = match ($calendar->kind) {
+                Calendar::KIND_CALENDAR => 'CALURI',
+                Calendar::KIND_FREE_BUSY => 'FBURL',
+                default => null,
+            };
+            if (null === $name) {
+                $this->issues->add('/calendars/'.$key, \sprintf('vCard has no calendar of kind "%s", wrote it as JSPROP', $calendar->kind));
+                $unwritten[$key] = $calendar;
+                continue;
+            }
+
+            $this->resource($name, (string) $key, $calendar->uri, $calendar->mediaType, $calendar->contexts, $calendar->pref, $calendar->label, $calendar->vCardParams, '/calendars/'.$key);
+        }
+
+        $this->unwrittenEntries('calendars', new Card(calendars: $unwritten), \count($card->calendars));
+
+        foreach ($card->schedulingAddresses as $key => $address) {
+            $this->resource('CALADRURI', (string) $key, $address->uri, null, $address->contexts, $address->pref, $address->label, $address->vCardParams, '/schedulingAddresses/'.$key);
+        }
+    }
+
+    /**
+     * Writes a resource, as is. vCard 3.0 embeds media as binary, with their format as a TYPE
+     * value, and gives other values as URIs with VALUE=uri.
+     *
+     * @param list<string>                       $contexts
+     * @param array<string, string|list<string>> $vCardParams
+     * @param array<string, string>              $params
+     */
+    private function resource(string $name, string $key, string $uri, ?string $mediaType, array $contexts, ?int $pref, ?string $label, array $vCardParams, string $path, array $params = []): void
+    {
+        $types = [];
+        $value = $uri;
+        $isMedia = \in_array($name, ['PHOTO', 'LOGO', 'SOUND', 'KEY'], true);
+        if (VCardVersion::V30 === $this->version && $isMedia) {
+            if (1 === preg_match('/^data:([^;,]*)(?:;[^;,]*)*;base64,(.*)$/s', $uri, $matches)) {
+                $params['ENCODING'] = 'b';
+                $value = $matches[2];
+                $mediaType ??= '' === $matches[1] ? null : $matches[1];
+            } else {
+                $params['VALUE'] = 'uri';
+            }
+
+            $format = null === $mediaType ? null : MediaTypes::toFormat($mediaType);
+            if (null !== $format) {
+                $types[] = $format;
+                $mediaType = null;
+            }
+        }
+
+        if (null !== $mediaType && !isset($params['ENCODING'])) {
+            $params['MEDIATYPE'] = $mediaType;
+        }
+
+        $this->entry($name, $value, $key, $contexts, $pref, $label, $vCardParams, $path, $params, $types, raw: true);
+    }
+
+    /**
+     * Entries vCard cannot hold, written as JSPROP. A pointer needs its parent to exist: the
+     * whole map when no entry of it was written.
+     *
+     * @param Card $unwritten A Card with only the entries not written, in the map
+     */
+    private function unwrittenEntries(string $map, Card $unwritten, int $count): void
+    {
+        $entries = $this->json($unwritten, $map);
+        if (!$entries instanceof \stdClass) {
+            return;
+        }
+
+        if (\count(get_object_vars($entries)) === $count) {
+            $this->jsProp($map, $entries);
+
+            return;
+        }
+
+        foreach (get_object_vars($entries) as $key => $entry) {
+            $this->jsProp($map.'/'.$this->escape((string) $key), $entry);
+        }
+    }
+
+    /**
      * The grammatical gender converts to GRAMGENDER, pronouns to PRONOUNS (RFC 9555, section
      * 2.5.4). A vendor-specific gender has no vCard value: it is written as JSPROP.
      */
@@ -590,8 +730,9 @@ final class Exporter
      * @param array<string, string>              $params      Property-specific parameters
      * @param list<string>                       $types       Property-specific TYPE values
      * @param string|null                        $group       The group to write the property in, if not that of vCardParams
+     * @param bool                               $raw         Whether to write the value as is, see add()
      */
-    private function entry(string $name, string|array $value, string $key, array $contexts, ?int $pref, ?string $label, array $vCardParams, string $path, array $params = [], array $types = [], ?string $group = null): void
+    private function entry(string $name, string|array $value, string $key, array $contexts, ?int $pref, ?string $label, array $vCardParams, string $path, array $params = [], array $types = [], ?string $group = null, bool $raw = false): void
     {
         foreach ($contexts as $context) {
             $type = match ($context) {
@@ -633,7 +774,7 @@ final class Exporter
             $group ??= $this->newGroup();
         }
 
-        $this->add($name, $value, $params, $group, $path);
+        $this->add($name, $value, $params, $group, $path, $raw);
         if (null !== $label) {
             $this->add('X-ABLABEL', $label, [], $group);
         }
@@ -696,7 +837,9 @@ final class Exporter
             'nicknames' => $card->nicknames, 'emails' => $card->emails, 'phones' => $card->phones,
             'addresses' => $card->addresses, 'onlineServices' => $card->onlineServices,
             'links' => $card->links, 'notes' => $card->notes, 'organizations' => $card->organizations,
-            'titles' => $card->titles, 'anniversaries' => $card->anniversaries,
+            'titles' => $card->titles, 'anniversaries' => $card->anniversaries, 'media' => $card->media,
+            'cryptoKeys' => $card->cryptoKeys, 'directories' => $card->directories, 'calendars' => $card->calendars,
+            'schedulingAddresses' => $card->schedulingAddresses,
         ];
         foreach ($maps as $map => $entries) {
             foreach ($entries as $key => $entry) {
@@ -758,11 +901,23 @@ final class Exporter
     /**
      * @param string|list<string|list<string>>   $value
      * @param array<string, string|list<string>> $params
+     * @param bool                               $raw    whether to write the value as is, without escaping
+     *
+     * sabre/vobject workaround ($raw): depending on the property and the version, sabre picks a
+     * binary class that encodes a URI in base64, or a text class that escapes its commas
      */
-    private function add(string $name, string|array $value, array $params = [], ?string $group = null, string $path = ''): void
+    private function add(string $name, string|array $value, array $params = [], ?string $group = null, string $path = '', bool $raw = false): void
     {
         if (VCardVersion::V30 === $this->version && \in_array($name, self::NOT_IN_V30, true)) {
             $this->issues->add($path, \sprintf('vCard 3.0 does not define %s, wrote it anyway', $name));
+        }
+
+        if ($raw && \is_string($value)) {
+            $property = new RawProperty($this->vCard, $name, null, $params, $group);
+            $property->setRawMimeDirValue($value);
+            $this->vCard->add($property);
+
+            return;
         }
 
         $property = $this->vCard->add((null === $group ? '' : $group.'.').$name, $value, $params);
@@ -798,7 +953,7 @@ final class Exporter
 
     private function collectGroups(Card $card): void
     {
-        $objects = [$card->name, $card->speakToAs, ...$card->speakToAs->pronouns ?? [], ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
+        $objects = [$card->name, $card->speakToAs, ...$card->media, ...$card->cryptoKeys, ...$card->directories, ...$card->calendars, ...$card->schedulingAddresses, ...$card->speakToAs->pronouns ?? [], ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
         foreach ($objects as $object) {
             $group = $object?->vCardParams['group'] ?? null;
             if (\is_string($group)) {
