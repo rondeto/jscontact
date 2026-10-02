@@ -104,6 +104,25 @@ final class JsonObject
         return null;
     }
 
+    /**
+     * An UnsignedInt (RFC 9553, section 1.4.2).
+     */
+    public function int(string $name): ?int
+    {
+        $value = $this->take($name);
+        if (null === $value) {
+            return null;
+        }
+
+        if (!\is_int($value) || $value < 0) {
+            $this->warn($name, 'expected an unsigned integer, ignored the value');
+
+            return null;
+        }
+
+        return $value;
+    }
+
     public function pref(): ?int
     {
         $value = $this->take('pref');

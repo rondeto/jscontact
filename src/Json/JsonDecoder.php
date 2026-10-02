@@ -8,6 +8,7 @@ use Rondeto\JSContact\Conversion\IssueCollector;
 use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
@@ -19,7 +20,9 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\InvalidCardException;
@@ -115,6 +118,7 @@ final readonly class JsonDecoder
             onlineServices: $this->map($object, 'onlineServices', 'OnlineService', $this->onlineService(...)),
             links: $this->map($object, 'links', 'Link', $this->link(...)),
             notes: $this->map($object, 'notes', 'Note', $this->note(...)),
+            anniversaries: $this->map($object, 'anniversaries', 'Anniversary', $this->anniversary(...)),
             keywords: $object->set('keywords'),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
@@ -293,6 +297,71 @@ final readonly class JsonDecoder
             contexts: $object->set('contexts', Registry::CONTEXTS),
             pref: $object->pref(),
             label: $object->string('label'),
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    private function anniversary(JsonObject $object): ?Anniversary
+    {
+        $kind = $object->has('kind') ? $object->enum('kind', Registry::ANNIVERSARY_KINDS) : null;
+        if (null === $kind) {
+            $object->warn('kind', 'missing mandatory property');
+        }
+
+        $date = $object->has('date') ? $object->object('date') : null;
+        if (!$object->has('date')) {
+            $object->warn('date', 'missing mandatory property');
+        }
+
+        $date = null === $date ? null : $this->date($date);
+        $place = $object->object('place');
+        $place = null === $place || !$place->isOfType('Address') ? null : $this->address($place);
+
+        if (null === $kind || null === $date) {
+            return null;
+        }
+
+        return new Anniversary(
+            kind: $kind,
+            date: $date,
+            place: $place,
+            vCardName: $object->string('vCardName'),
+            vCardParams: $object->vCardParams(),
+            extra: $object->extra(),
+        );
+    }
+
+    /**
+     * A PartialDate, or a Timestamp when its @var says so (RFC 9553, section 2.8.1).
+     */
+    private function date(JsonObject $object): PartialDate|Timestamp|null
+    {
+        $type = $object->string('@type');
+        if (null !== $type && 0 === strcasecmp($type, 'Timestamp') && $object->isOfType('Timestamp')) {
+            $utc = $object->has('utc') ? $object->dateTime('utc') : null;
+            if (!$object->has('utc')) {
+                $object->warn('utc', 'missing mandatory property');
+            }
+
+            return null === $utc ? null : new Timestamp(
+                utc: $utc,
+                vCardName: $object->string('vCardName'),
+                vCardParams: $object->vCardParams(),
+                extra: $object->extra(),
+            );
+        }
+
+        if (!$object->isOfType('PartialDate')) {
+            return null;
+        }
+
+        return new PartialDate(
+            year: $object->int('year'),
+            month: $object->int('month'),
+            day: $object->int('day'),
+            calendarScale: $object->string('calendarScale'),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
             extra: $object->extra(),

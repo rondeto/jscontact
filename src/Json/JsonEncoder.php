@@ -6,6 +6,7 @@ namespace Rondeto\JSContact\Json;
 
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
@@ -18,6 +19,7 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\CardValidator;
@@ -82,6 +84,7 @@ final readonly class JsonEncoder
             'onlineServices' => $this->map($card->onlineServices, $this->onlineService(...)),
             'links' => $this->map($card->links, $this->link(...)),
             'notes' => $this->map($card->notes, $this->note(...)),
+            'anniversaries' => $this->map($card->anniversaries, $this->anniversary(...)),
             'keywords' => $this->set($card->keywords),
             'vCardProps' => [] === $card->vCardProps ? null : array_map($this->vCardProperty(...), $card->vCardProps),
             'vCardName' => $card->vCardName,
@@ -240,6 +243,22 @@ final readonly class JsonEncoder
             'vCardName' => $link->vCardName,
             'vCardParams' => $this->vCardParams($link->vCardParams),
         ], $link->extra);
+    }
+
+    private function anniversary(Anniversary $anniversary): \stdClass
+    {
+        $date = $anniversary->date;
+
+        return $this->object([
+            'kind' => $anniversary->kind,
+            'date' => $date instanceof Timestamp
+                // A Timestamp is not the default type of date: its @type is mandatory.
+                ? $this->object(['@type' => 'Timestamp', 'utc' => $this->dateTime($date->utc), 'vCardName' => $date->vCardName, 'vCardParams' => $this->vCardParams($date->vCardParams)], $date->extra)
+                : $this->object(['year' => $date->year, 'month' => $date->month, 'day' => $date->day, 'calendarScale' => $date->calendarScale, 'vCardName' => $date->vCardName, 'vCardParams' => $this->vCardParams($date->vCardParams)], $date->extra),
+            'place' => null === $anniversary->place ? null : $this->address($anniversary->place),
+            'vCardName' => $anniversary->vCardName,
+            'vCardParams' => $this->vCardParams($anniversary->vCardParams),
+        ], $anniversary->extra);
     }
 
     private function note(Note $note): \stdClass

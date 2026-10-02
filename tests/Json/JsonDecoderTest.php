@@ -9,11 +9,14 @@ use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Json\DecodingException;
 use Rondeto\JSContact\Json\JsonDecoder;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Name;
 use Rondeto\JSContact\Model\NameComponent;
+use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
 
@@ -230,6 +233,26 @@ final class JsonDecoderTest extends TestCase
         $this->assertIssues([
             '/phones/p1/vCardParams/x-bad: expected a string or a list of strings, ignored the parameter',
             '/vCardProps/1: not a jCard property, ignored the entry',
+        ], $result);
+    }
+
+    public function testAnniversaryDates(): void
+    {
+        $result = $this->decode(['anniversaries' => [
+            'a1' => ['kind' => 'birth', 'date' => ['@type' => 'timestamp', 'utc' => '2019-10-15T23:10:00Z']],
+            'a2' => ['kind' => 'death', 'date' => ['year' => 1953, 'month' => '4']],
+            'a3' => ['kind' => 'wedding'],
+        ]]);
+
+        self::assertEquals([
+            'a1' => new Anniversary('birth', new Timestamp(new \DateTimeImmutable('2019-10-15T23:10:00Z'))),
+            'a2' => new Anniversary('death', new PartialDate(1953)),
+        ], $result->value->anniversaries);
+        $this->assertIssues([
+            '/anniversaries/a1/date/@type: read "timestamp" as "Timestamp"',
+            '/anniversaries/a2/date/month: expected an unsigned integer, ignored the value',
+            '/anniversaries/a3/date: missing mandatory property',
+            '/anniversaries/a3: ignored the entry',
         ], $result);
     }
 

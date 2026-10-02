@@ -6,12 +6,15 @@ namespace Rondeto\JSContact\Tests\VCard;
 
 use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Conversion\Result;
+use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
@@ -136,6 +139,46 @@ final class VCardDecoderTest extends TestCase
         // Two organizations in its group: the title's organization is unknown.
         self::assertEquals(new Title('Boss', Title::KIND_TITLE, vCardParams: ['type' => 'work', 'group' => 'item1']), $card->titles['TITLE-1'] ?? null);
         self::assertSame(['/vCardProps/0: kept ORG verbatim: an organizational unit has no name'], array_map(strval(...), $result->issues));
+    }
+
+    public function testTextWithCommasAndNewLinesIsUnescaped(): void
+    {
+        $card = $this->decode("NOTE:Line 1\\nLine 2, and more\r\n")->value;
+
+        self::assertSame("Line 1\nLine 2, and more", $card->notes['NOTE-1']->note ?? null);
+    }
+
+    public function testAnniversaries(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'BDAY;CALSCALE=Hebrew:--0415',
+            'BDAY:19800101',
+            'BIRTHPLACE;VALUE=uri:geo:46.77,23.59',
+            'DEATHDATE;VALUE=text:circa 1800',
+            'DEATHPLACE:Paris',
+            'ANNIVERSARY:1985-04',
+            'ANNIVERSARY:19851012T1200',
+            '',
+        ]));
+        $card = $result->value;
+
+        self::assertEquals([
+            'ANNIVERSARY-1' => new Anniversary('birth', new PartialDate(month: 4, day: 15, calendarScale: 'hebrew'), new Address(coordinates: 'geo:46.77,23.59')),
+            'ANNIVERSARY-4' => new Anniversary('wedding', new PartialDate(1985, 4)),
+        ], $card->anniversaries);
+        self::assertSame([
+            '/vCardProps/0: kept BDAY verbatim: more than one BDAY property',
+            '/vCardProps/1: kept DEATHDATE verbatim: a date as text has no JSContact counterpart',
+            '/vCardProps/2: kept ANNIVERSARY verbatim: not a date, nor a UTC date-time',
+            '/vCardProps/3: kept DEATHPLACE verbatim: no DEATHDATE property to attach the place to',
+        ], array_map(strval(...), $result->issues));
+    }
+
+    public function testVersion3Dates(): void
+    {
+        $card = $this->decode("BDAY:1996-04-15\r\n", '3.0')->value;
+
+        self::assertEquals(new PartialDate(1996, 4, 15), $card->anniversaries['ANNIVERSARY-1']->date ?? null);
     }
 
     public function testRepeatedValueParametersAreReported(): void

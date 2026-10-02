@@ -7,6 +7,8 @@ namespace Rondeto\JSContact\VCard\Internal;
 use Rondeto\JSContact\Model\VCardProperty;
 use Sabre\VObject\InvalidDataException;
 use Sabre\VObject\Property;
+use Sabre\VObject\Property\Text;
+use Sabre\VObject\Property\Unknown;
 
 /**
  * Reads one vCard property, keeping track of the parameters and TYPE values converted so
@@ -146,6 +148,14 @@ final class PropertyReader
      */
     public function text(): string
     {
+        // sabre/vobject workaround: sabre splits text values on unescaped commas, and then
+        // returns them escaped again, "\n" included. A single text value has no list
+        // separator, so its parts are joined back.
+        $parts = $this->property->getParts();
+        if ($this->property instanceof Text && !$this->property instanceof Unknown && \count($parts) > 1) {
+            return implode($this->property->delimiter, array_map(static fn (mixed $part): string => \is_string($part) ? $part : '', $parts));
+        }
+
         try {
             return $this->property->__toString();
         } catch (\Throwable) {

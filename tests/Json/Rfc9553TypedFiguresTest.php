@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Json\JsonDecoder;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Author;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
@@ -19,7 +20,9 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 
 /**
@@ -197,6 +200,18 @@ final class Rfc9553TypedFiguresTest extends TestCase
             ['link3' => new Link('mailto:contact@example.com', kind: Link::KIND_CONTACT, pref: 1)],
             $this->figure(37)->links,
         );
+    }
+
+    public function testFigure41Anniversaries(): void
+    {
+        self::assertEquals([
+            'k8' => new Anniversary(Anniversary::KIND_BIRTH, new PartialDate(1953, 4, 15)),
+            'k9' => new Anniversary(
+                Anniversary::KIND_DEATH,
+                new Timestamp(new \DateTimeImmutable('2019-10-15T23:10:00Z')),
+                new Address(full: "4445 Tree Street\nNew England, ND 58647\nUSA"),
+            ),
+        ], $this->figure(41)->anniversaries);
     }
 
     public function testFigure42Keywords(): void

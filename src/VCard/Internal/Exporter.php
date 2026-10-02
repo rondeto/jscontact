@@ -6,7 +6,9 @@ namespace Rondeto\JSContact\VCard\Internal;
 
 use Rondeto\JSContact\Conversion\IssueCollector;
 use Rondeto\JSContact\Conversion\Result;
+use Rondeto\JSContact\Json\JsonEncoder;
 use Rondeto\JSContact\Model\Address;
+use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\Link;
@@ -16,6 +18,7 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
@@ -23,6 +26,7 @@ use Rondeto\JSContact\Validation\Registry;
 use Rondeto\JSContact\VCard\VCardVersion;
 use Sabre\VObject\Component\VCard;
 use Sabre\VObject\Property;
+use Sabre\VObject\Property\Uri;
 use Sabre\VObject\Reader;
 
 /**
@@ -33,7 +37,7 @@ use Sabre\VObject\Reader;
 final class Exporter
 {
     /** vCard 4.0 properties that vCard 3.0 does not define. */
-    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI'];
+    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI', 'ANNIVERSARY', 'DEATHDATE', 'BIRTHPLACE', 'DEATHPLACE'];
 
     /** Phone features and the TEL TYPE values they convert to (RFC 9555, Table 3). */
     private const array PHONE_TYPES = [
@@ -116,6 +120,8 @@ final class Exporter
         foreach ($card->notes as $key => $note) {
             $this->note((string) $key, $note);
         }
+
+        $this->anniversaries($card);
 
         $organizationGroups = $this->organizationGroups($card);
         foreach ($card->organizations as $key => $organization) {
@@ -380,6 +386,99 @@ final class Exporter
     }
 
     /**
+     * Anniversaries convert to BDAY, DEATHDATE or ANNIVERSARY, and their place to BIRTHPLACE
+     * or DEATHPLACE (RFC 9555, section 2.5.1). What vCard cannot hold is written as JSPROP.
+     */
+    private function anniversaries(Card $card): void
+    {
+        $unwritten = [];
+        foreach ($card->anniversaries as $key => $anniversary) {
+            $key = (string) $key;
+            $path = '/anniversaries/'.$key;
+            [$name, $placeName] = match ($anniversary->kind) {
+                Anniversary::KIND_BIRTH => ['BDAY', 'BIRTHPLACE'],
+                Anniversary::KIND_DEATH => ['DEATHDATE', 'DEATHPLACE'],
+                Anniversary::KIND_WEDDING => ['ANNIVERSARY', null],
+                default => [null, null],
+            };
+            $value = Dates::format($anniversary->date, $this->version);
+            if (null === $name || null === $value) {
+                $this->issues->add($path, null === $name
+                    ? \sprintf('vCard has no anniversary of kind "%s", wrote it as JSPROP', $anniversary->kind)
+                    : 'vCard 3.0 has no partial dates, wrote the anniversary as JSPROP');
+                $unwritten[$key] = $anniversary;
+                continue;
+            }
+
+            $params = [];
+            if ($anniversary->date instanceof PartialDate && null !== $anniversary->date->calendarScale) {
+                if (VCardVersion::V30 === $this->version) {
+                    $this->issues->add($path.'/date/calendarScale', 'vCard 3.0 has no CALSCALE, left it out');
+                } else {
+                    $params['CALSCALE'] = $anniversary->date->calendarScale;
+                }
+            }
+
+            $this->entry($name, $value, $key, [], null, null, $anniversary->vCardParams, $path, $params);
+
+            $place = $anniversary->place;
+            if (null === $place) {
+                continue;
+            }
+
+            if (null !== $placeName && null !== ($placeValue = $this->placeValue($place))) {
+                $placeParams = $this->parameters($place->vCardParams);
+                if (null !== $place->coordinates) {
+                    $placeParams['VALUE'] = 'uri';
+                }
+
+                $group = $place->vCardParams['group'] ?? null;
+                $this->add($placeName, $placeValue, $placeParams, \is_string($group) ? $group : null, $path.'/place');
+            } else {
+                $this->issues->add($path.'/place', 'vCard cannot hold this place, wrote it as JSPROP');
+                $this->jsProp('anniversaries/'.$this->escape($key).'/place', $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key, 'place'));
+            }
+        }
+
+        // A JSPROP needs its parent to exist: the whole map when no anniversary was written.
+        if ([] !== $unwritten && \count($unwritten) === \count($card->anniversaries)) {
+            $this->jsProp('anniversaries', $this->json(new Card(anniversaries: $unwritten), 'anniversaries'));
+        } else {
+            foreach ($unwritten as $key => $anniversary) {
+                $this->jsProp('anniversaries/'.$this->escape($key), $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key));
+            }
+        }
+    }
+
+    /**
+     * The value of a BIRTHPLACE or DEATHPLACE: the full address as text, or the coordinates
+     * as a "geo:" URI. Null if the place holds anything else.
+     */
+    private function placeValue(Address $place): ?string
+    {
+        $isFull = null !== $place->full && null === $place->coordinates;
+        $isCoordinates = null === $place->full && null !== $place->coordinates;
+        $hasMore = [] !== $place->components || null !== $place->countryCode || null !== $place->timeZone
+            || [] !== $place->contexts || null !== $place->pref || null !== $place->phoneticSystem
+            || null !== $place->phoneticScript || [] !== $place->extra;
+
+        return $hasMore || (!$isFull && !$isCoordinates) ? null : ($place->full ?? $place->coordinates);
+    }
+
+    /**
+     * Part of the JSON form of a Card, for JSPROP.
+     */
+    private function json(Card $card, string ...$path): mixed
+    {
+        $value = new JsonEncoder(validate: false)->normalize($card);
+        foreach ($path as $token) {
+            $value = $value instanceof \stdClass ? ($value->{$token} ?? null) : null;
+        }
+
+        return $value;
+    }
+
+    /**
      * The group of each organization a title is held in, so that the TITLE or ROLE property
      * can share it (RFC 9555, section 2.9.6): the one it was read with, or a new one.
      *
@@ -555,7 +654,7 @@ final class Exporter
             'nicknames' => $card->nicknames, 'emails' => $card->emails, 'phones' => $card->phones,
             'addresses' => $card->addresses, 'onlineServices' => $card->onlineServices,
             'links' => $card->links, 'notes' => $card->notes, 'organizations' => $card->organizations,
-            'titles' => $card->titles,
+            'titles' => $card->titles, 'anniversaries' => $card->anniversaries,
         ];
         foreach ($maps as $map => $entries) {
             foreach ($entries as $key => $entry) {
@@ -571,6 +670,12 @@ final class Exporter
 
                 if ($entry instanceof Address) {
                     $this->arrayItemExtras('/addresses/'.$key.'/components', $entry->components);
+                }
+
+                if ($entry instanceof Anniversary) {
+                    foreach ($entry->date->extra as $name => $value) {
+                        $this->jsProp('anniversaries/'.$this->escape((string) $key).'/date/'.$this->escape((string) $name), $value);
+                    }
                 }
 
                 if ($entry instanceof Organization) {
@@ -618,7 +723,16 @@ final class Exporter
             $this->issues->add($path, \sprintf('vCard 3.0 does not define %s, wrote it anyway', $name));
         }
 
-        $this->vCard->add((null === $group ? '' : $group.'.').$name, $value, $params);
+        $property = $this->vCard->add((null === $group ? '' : $group.'.').$name, $value, $params);
+
+        // sabre/vobject workaround: sabre escapes commas in URI values ("geo:1\,2"), which
+        // RFC 6350 does not, and does not unescape them when reading URL. Write URIs as is.
+        if ($property instanceof Uri && \is_string($value)) {
+            $this->vCard->remove($property);
+            $raw = new RawProperty($this->vCard, $property->name ?? $name, null, $params, $group);
+            $raw->setRawMimeDirValue($value);
+            $this->vCard->add($raw);
+        }
     }
 
     /**
@@ -642,7 +756,7 @@ final class Exporter
 
     private function collectGroups(Card $card): void
     {
-        $objects = [$card->name, ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
+        $objects = [$card->name, ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
         foreach ($objects as $object) {
             $group = $object?->vCardParams['group'] ?? null;
             if (\is_string($group)) {
