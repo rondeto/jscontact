@@ -1,0 +1,13 @@
+{"name": {
+  "components": [
+    {"kind": "surname", "value": "Stevenson"},
+    {"kind": "given", "value": "John"},
+    {"kind": "given2", "value": "Philip"},
+    {"kind": "given2", "value": "Paul"},
+    {"kind": "title", "value": "Dr."},
+    {"kind": "credential", "value": "M.D."},
+    {"kind": "credential", "value": "A.C.P."},
+    {"kind": "generation", "value": "Jr."}
+  ],
+  "sortAs": {"surname": "Stevenson", "given": "John Philip"}
+}}

@@ -1,0 +1,12 @@
+{"addresses": {"ADDR-1": {
+  "contexts": {"work": true},
+  "components": [
+    {"kind": "locality", "value": "Reston"},
+    {"kind": "region", "value": "VA"},
+    {"kind": "postcode", "value": "20190"},
+    {"kind": "country", "value": "USA"},
+    {"kind": "number", "value": "54321"},
+    {"kind": "name", "value": "Oak St"}
+  ],
+  "countryCode": "US"
+}}}

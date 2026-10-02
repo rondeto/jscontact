@@ -16,6 +16,7 @@ use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Phone;
+use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\Validation\Syntax;
@@ -77,6 +78,7 @@ final readonly class JsonEncoder
             'links' => $this->map($card->links, $this->link(...)),
             'notes' => $this->map($card->notes, $this->note(...)),
             'keywords' => $this->set($card->keywords),
+            'vCardProps' => [] === $card->vCardProps ? null : array_map($this->vCardProperty(...), $card->vCardProps),
             'vCardName' => $card->vCardName,
             'vCardParams' => $this->vCardParams($card->vCardParams),
         ], $card->extra);
@@ -303,5 +305,15 @@ final readonly class JsonEncoder
     private function vCardParams(array $parameters): ?\stdClass
     {
         return [] === $parameters ? null : (object) $parameters;
+    }
+
+    /**
+     * A jCard property: [name, parameters, type, value, ...] (RFC 7095, section 3.3).
+     *
+     * @return list<mixed>
+     */
+    private function vCardProperty(VCardProperty $property): array
+    {
+        return [$property->name, (object) $property->parameters, $property->type, ...$property->values];
     }
 }

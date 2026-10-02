@@ -1,0 +1,4 @@
+{"phones": {
+  "PHONE-A": {"contexts": {"private": true}, "features": {"voice": true}, "number": "tel:+1-555-555-5555;ext=5555", "pref": 1},
+  "PHONE-B": {"contexts": {"private": true}, "number": "tel:+33-01-23-45-67"}
+}}
