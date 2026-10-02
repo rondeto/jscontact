@@ -13,6 +13,7 @@ use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
@@ -22,8 +23,10 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
@@ -102,6 +105,28 @@ final readonly class JsonEncoder
             'directories' => $this->map($card->directories, $this->resource(...)),
             'calendars' => $this->map($card->calendars, $this->resource(...)),
             'schedulingAddresses' => $this->map($card->schedulingAddresses, $this->resource(...)),
+            'preferredLanguages' => $this->map($card->preferredLanguages, fn (LanguagePref $language): \stdClass => $this->object([
+                'language' => $language->language,
+                'contexts' => $this->set($language->contexts),
+                'pref' => $language->pref,
+                'vCardName' => $language->vCardName,
+                'vCardParams' => $this->vCardParams($language->vCardParams),
+            ], $language->extra)),
+            'relatedTo' => $this->map($card->relatedTo, fn (Relation $relation): \stdClass => $this->object([
+                // Written even when empty: an empty set says the relationship is undefined.
+                'relation' => $this->set($relation->relation) ?? new \stdClass(),
+                'vCardName' => $relation->vCardName,
+                'vCardParams' => $this->vCardParams($relation->vCardParams),
+            ], $relation->extra)),
+            'personalInfo' => $this->map($card->personalInfo, fn (PersonalInfo $info): \stdClass => $this->object([
+                'kind' => $info->kind,
+                'value' => $info->value,
+                'level' => $info->level,
+                'listAs' => $info->listAs,
+                'label' => $info->label,
+                'vCardName' => $info->vCardName,
+                'vCardParams' => $this->vCardParams($info->vCardParams),
+            ], $info->extra)),
             'keywords' => $this->set($card->keywords),
             'vCardProps' => [] === $card->vCardProps ? null : array_map($this->vCardProperty(...), $card->vCardProps),
             'vCardName' => $card->vCardName,

@@ -77,9 +77,10 @@ final class Rfc9555FiguresTest extends TestCase
 
     private function card(string $json): string
     {
-        $properties = json_decode($json, true, 512, \JSON_THROW_ON_ERROR);
-        self::assertIsArray($properties);
+        // Decoded as objects, so that an empty object stays one.
+        $properties = json_decode($json, false, 512, \JSON_THROW_ON_ERROR);
+        self::assertInstanceOf(\stdClass::class, $properties);
 
-        return json_encode(['@type' => 'Card', 'version' => '2.0'] + $properties, \JSON_THROW_ON_ERROR);
+        return json_encode((object) (['@type' => 'Card', 'version' => '2.0'] + get_object_vars($properties)), \JSON_THROW_ON_ERROR);
     }
 }

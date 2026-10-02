@@ -15,6 +15,7 @@ use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
@@ -25,8 +26,10 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
@@ -71,6 +74,32 @@ final class Rfc9553TypedFiguresTest extends TestCase
                 isOrdered: true,
             ),
         ), $this->figure(6));
+    }
+
+    public function testFigure13RelatedTo(): void
+    {
+        self::assertEquals([
+            'urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6' => new Relation([Relation::FRIEND]),
+            '8cacdfb7d1ffdb59@example.com' => new Relation(),
+        ], $this->figure(13)->relatedTo);
+    }
+
+    public function testFigure28PreferredLanguages(): void
+    {
+        self::assertEquals([
+            'l1' => new LanguagePref('en', ['work'], 1),
+            'l2' => new LanguagePref('fr', ['work'], 2),
+            'l3' => new LanguagePref('fr', ['private']),
+        ], $this->figure(28)->preferredLanguages);
+    }
+
+    public function testFigure44PersonalInfo(): void
+    {
+        self::assertEquals([
+            'pi2' => new PersonalInfo(PersonalInfo::KIND_EXPERTISE, 'chemistry', PersonalInfo::LEVEL_HIGH),
+            'pi1' => new PersonalInfo(PersonalInfo::KIND_HOBBY, 'reading', PersonalInfo::LEVEL_HIGH),
+            'pi6' => new PersonalInfo(PersonalInfo::KIND_INTEREST, 'r&b music', PersonalInfo::LEVEL_MEDIUM),
+        ], $this->figure(44)->personalInfo);
     }
 
     public function testFigures8And15Timestamps(): void

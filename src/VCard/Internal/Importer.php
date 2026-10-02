@@ -17,6 +17,7 @@ use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Name;
@@ -27,8 +28,10 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\Model\SchedulingAddress;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Title;
@@ -80,13 +83,21 @@ final class Importer
         'CALURI' => ['calendars', 'CAL'],
         'FBURL' => ['calendars', 'FBURL'],
         'CALADRURI' => ['schedulingAddresses', 'SCHEDULING'],
+        'LANG' => ['preferredLanguages', 'LANG'],
+        // Personal information is named after PERSINFO, as in RFC 9555, Figures 28 to 30.
+        'EXPERTISE' => ['personalInfo', 'PERSINFO'],
+        'HOBBY' => ['personalInfo', 'PERSINFO'],
+        'INTEREST' => ['personalInfo', 'PERSINFO'],
     ];
 
     /** vCard properties whose JSContact object has a label property, set from X-ABLabel. */
     private const array LABELED = [
         'EMAIL', 'TEL', 'IMPP', 'SOCIALPROFILE', 'URL', 'CONTACT-URI', 'PHOTO', 'LOGO', 'SOUND', 'KEY', 'SOURCE',
-        'ORG-DIRECTORY', 'CALURI', 'FBURL', 'CALADRURI',
+        'ORG-DIRECTORY', 'CALURI', 'FBURL', 'CALADRURI', 'EXPERTISE', 'HOBBY', 'INTEREST',
     ];
+
+    /** LEVEL values of EXPERTISE, and the PersonalInfo level they convert to (RFC 9555, section 2.3.13). */
+    private const array EXPERTISE_LEVELS = ['beginner' => 'low', 'average' => 'medium', 'expert' => 'high'];
 
     /** Resources whose format vCard 3.0 gives as a TYPE value, or embeds as binary. */
     private const array MEDIA = ['PHOTO', 'LOGO', 'SOUND', 'KEY'];
@@ -171,6 +182,15 @@ final class Importer
 
     /** @var array<string, SchedulingAddress> */
     private array $schedulingAddresses = [];
+
+    /** @var array<string, LanguagePref> */
+    private array $preferredLanguages = [];
+
+    /** @var array<string, Relation> */
+    private array $relatedTo = [];
+
+    /** @var array<string, PersonalInfo> */
+    private array $personalInfo = [];
 
     /** @var array<string, Anniversary> */
     private array $anniversaries = [];
@@ -278,6 +298,9 @@ final class Importer
             directories: $this->directories,
             calendars: $this->calendars,
             schedulingAddresses: $this->schedulingAddresses,
+            preferredLanguages: $this->preferredLanguages,
+            relatedTo: $this->relatedTo,
+            personalInfo: $this->personalInfo,
             keywords: array_values(array_unique($this->keywords)),
             vCardProps: $this->vCardProps,
         );
@@ -314,6 +337,9 @@ final class Importer
             'BDAY', 'DEATHDATE', 'ANNIVERSARY' => $this->dates[] = $property,
             'GRAMGENDER' => $this->grammaticalGender($property),
             'PRONOUNS' => $this->pronoun($property),
+            'LANG' => $this->language($property),
+            'RELATED' => $this->related($property),
+            'EXPERTISE', 'HOBBY', 'INTEREST' => $this->personalInfo($property),
             'PHOTO', 'LOGO', 'SOUND', 'KEY', 'SOURCE', 'ORG-DIRECTORY', 'CALURI', 'FBURL', 'CALADRURI' => $this->resource($property),
             'BIRTHPLACE', 'DEATHPLACE' => $this->places[$property->name][] = $property,
             default => $this->raw($property),
@@ -670,6 +696,76 @@ final class Importer
     }
 
     /**
+     * LANG converts to a preferred language (RFC 9555, section 2.7.3).
+     */
+    private function language(PropertyReader $property): void
+    {
+        $language = trim($property->text());
+        if (1 !== preg_match(Syntax::LANGUAGE_TAG, $language)) {
+            $this->raw($property, \sprintf('"%s" is not a language tag', $language));
+
+            return;
+        }
+
+        $common = $this->common($property);
+        $this->preferredLanguages[$common->key] = new LanguagePref($language, $common->contexts, $common->pref, vCardParams: $common->vCardParams);
+    }
+
+    /**
+     * RELATED converts to an entry of relatedTo, keyed by its value: the uid, URI or text
+     * that identifies the related entity. Its TYPE values are the relation (RFC 9555,
+     * section 2.9.5).
+     */
+    private function related(PropertyReader $property): void
+    {
+        $key = trim($property->text());
+        if ('' === $key || isset($this->relatedTo[$key])) {
+            $this->raw($property, '' === $key ? 'empty value' : 'another RELATED property has the same value');
+
+            return;
+        }
+
+        $relation = $property->unreadTypes();
+        foreach ($relation as $type) {
+            $property->takeType($type);
+        }
+
+        $this->relatedTo[$key] = new Relation($relation, vCardParams: $property->unreadParameters());
+    }
+
+    /**
+     * EXPERTISE, HOBBY and INTEREST convert to personal information, with LEVEL and INDEX
+     * (RFC 9555, sections 2.3.10, 2.3.13 and 2.10).
+     */
+    private function personalInfo(PropertyReader $property): void
+    {
+        $level = $property->parameter('LEVEL');
+        if (null !== $level) {
+            $level = strtolower($level);
+            $level = 'EXPERTISE' === $property->name ? (self::EXPERTISE_LEVELS[$level] ?? $level) : $level;
+        }
+
+        $listAs = null;
+        if (null !== ($index = $property->peek('INDEX'))) {
+            if (1 === preg_match('/^[1-9]\d*$/', $index)) {
+                $listAs = (int) $property->parameter('INDEX');
+            } else {
+                $this->issues->add('', \sprintf('%s: INDEX "%s" is not a positive integer, kept it in vCardParams', $property->name, $index));
+            }
+        }
+
+        $common = $this->common($property);
+        $this->personalInfo[$common->key] = new PersonalInfo(
+            kind: strtolower($property->name),
+            value: $property->text(),
+            level: $level,
+            listAs: $listAs,
+            label: $common->label,
+            vCardParams: $common->vCardParams,
+        );
+    }
+
+    /**
      * PHOTO, LOGO and SOUND convert to media, KEY to a crypto key, SOURCE and ORG-DIRECTORY
      * to directories, CALURI and FBURL to calendars, CALADRURI to a scheduling address
      * (RFC 9555, sections 2.4.3, 2.5.7, 2.9.2, 2.10.4, 2.11.7, 2.12.1 and 2.13).
@@ -878,7 +974,7 @@ final class Importer
         // their TYPE and PREF stay in vCardParams.
         $pref = null;
         $contexts = [];
-        if (!\in_array($map, ['notes', 'titles', 'organizations', 'anniversaries'], true)) {
+        if (!\in_array($map, ['notes', 'titles', 'organizations', 'anniversaries', 'personalInfo'], true)) {
             $value = $property->parameter('PREF');
             if (null !== $value && 1 === preg_match('/^\d+$/', $value) && (int) $value >= 1 && (int) $value <= 100) {
                 $pref = (int) $value;
@@ -891,7 +987,7 @@ final class Importer
             }
         }
 
-        if (!\in_array($map, ['notes', 'titles', 'anniversaries'], true)) {
+        if (!\in_array($map, ['notes', 'titles', 'anniversaries', 'personalInfo'], true)) {
             $types = ['home' => 'private', 'work' => 'work'];
             if ('addresses' === $map) {
                 $types += ['billing' => 'billing', 'delivery' => 'delivery'];
@@ -938,6 +1034,8 @@ final class Importer
             'directories' => isset($this->directories[$key]),
             'calendars' => isset($this->calendars[$key]),
             'schedulingAddresses' => isset($this->schedulingAddresses[$key]),
+            'preferredLanguages' => isset($this->preferredLanguages[$key]),
+            'personalInfo' => isset($this->personalInfo[$key]),
             default => isset($this->notes[$key]),
         };
     }
@@ -1151,7 +1249,8 @@ final class Importer
                 addresses: $card->addresses, onlineServices: $card->onlineServices, links: $card->links,
                 notes: $card->notes, anniversaries: $card->anniversaries, media: $card->media,
                 cryptoKeys: $card->cryptoKeys, directories: $card->directories, calendars: $card->calendars,
-                schedulingAddresses: $card->schedulingAddresses, keywords: $card->keywords, vCardProps: $this->vCardProps,
+                schedulingAddresses: $card->schedulingAddresses, preferredLanguages: $card->preferredLanguages,
+                relatedTo: $card->relatedTo, personalInfo: $card->personalInfo, keywords: $card->keywords, vCardProps: $this->vCardProps,
             );
 
             return new Result($card, [...$this->issues->all(), ...$this->validator->validate($card)]);

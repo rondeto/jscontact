@@ -22,10 +22,12 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\Registry;
+use Rondeto\JSContact\Validation\Syntax;
 use Rondeto\JSContact\VCard\VCardVersion;
 use Sabre\VObject\Component\VCard;
 use Sabre\VObject\Property;
@@ -40,7 +42,12 @@ use Sabre\VObject\Reader;
 final class Exporter
 {
     /** vCard 4.0 properties that vCard 3.0 does not define. */
-    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI', 'ANNIVERSARY', 'DEATHDATE', 'BIRTHPLACE', 'DEATHPLACE', 'GRAMGENDER', 'PRONOUNS', 'ORG-DIRECTORY'];
+    private const array NOT_IN_V30 = ['KIND', 'MEMBER', 'LANGUAGE', 'CREATED', 'SOCIALPROFILE', 'CONTACT-URI', 'ANNIVERSARY', 'DEATHDATE', 'BIRTHPLACE', 'DEATHPLACE', 'GRAMGENDER', 'PRONOUNS', 'ORG-DIRECTORY',
+        'LANG', 'RELATED', 'EXPERTISE', 'HOBBY', 'INTEREST',
+    ];
+
+    /** PersonalInfo levels and the LEVEL values of EXPERTISE they convert to (RFC 9555, section 2.3.13). */
+    private const array EXPERTISE_LEVELS = ['low' => 'beginner', 'medium' => 'average', 'high' => 'expert'];
 
     /** Phone features and the TEL TYPE values they convert to (RFC 9555, Table 3). */
     private const array PHONE_TYPES = [
@@ -127,6 +134,7 @@ final class Exporter
         $this->anniversaries($card);
         $this->speakToAs($card);
         $this->resources($card);
+        $this->languagesRelationsAndPersonalInfo($card);
 
         $organizationGroups = $this->organizationGroups($card);
         foreach ($card->organizations as $key => $organization) {
@@ -464,6 +472,73 @@ final class Exporter
         foreach ($card->schedulingAddresses as $key => $address) {
             $this->resource('CALADRURI', (string) $key, $address->uri, null, $address->contexts, $address->pref, $address->label, $address->vCardParams, '/schedulingAddresses/'.$key);
         }
+    }
+
+    /**
+     * Preferred languages convert to LANG, relations to RELATED, personal information to
+     * EXPERTISE, HOBBY or INTEREST (RFC 9555, sections 2.7.3, 2.9.5 and 2.10).
+     */
+    private function languagesRelationsAndPersonalInfo(Card $card): void
+    {
+        foreach ($card->preferredLanguages as $key => $language) {
+            $this->entry('LANG', $language->language, (string) $key, $language->contexts, $language->pref, null, $language->vCardParams, '/preferredLanguages/'.$key);
+        }
+
+        foreach ($card->relatedTo as $key => $relation) {
+            $key = (string) $key;
+            $path = '/relatedTo/'.$this->escape($key);
+            $types = [];
+            foreach ($relation->relation as $type) {
+                if (1 === preg_match('/^[a-z0-9-]+$/i', $type)) {
+                    $types[] = $type;
+                } else {
+                    $this->issues->add($path.'/relation/'.$this->escape($type), 'vCard has no TYPE for this relation, wrote it as JSPROP');
+                    $this->jsProp('relatedTo/'.$this->escape($key).'/relation/'.$this->escape($type), true);
+                }
+            }
+
+            $params = $this->parameters($relation->vCardParams);
+            if ([] !== $types) {
+                $params['TYPE'] = $types;
+            }
+
+            $group = $relation->vCardParams['group'] ?? null;
+            $group = \is_string($group) ? $group : null;
+            // A related entity is a URI by default, or text with VALUE=text.
+            if (1 === preg_match(Syntax::URI, $key)) {
+                $this->add('RELATED', $key, $params, $group, $path, raw: true);
+            } else {
+                $this->add('RELATED', $key, ['VALUE' => 'text', ...$params], $group, $path);
+            }
+        }
+
+        $unwritten = [];
+        foreach ($card->personalInfo as $key => $info) {
+            $name = match ($info->kind) {
+                PersonalInfo::KIND_EXPERTISE => 'EXPERTISE',
+                PersonalInfo::KIND_HOBBY => 'HOBBY',
+                PersonalInfo::KIND_INTEREST => 'INTEREST',
+                default => null,
+            };
+            if (null === $name) {
+                $this->issues->add('/personalInfo/'.$key, \sprintf('vCard has no personal information of kind "%s", wrote it as JSPROP', $info->kind));
+                $unwritten[$key] = $info;
+                continue;
+            }
+
+            $params = [];
+            if (null !== $info->level) {
+                $params['LEVEL'] = 'EXPERTISE' === $name ? (self::EXPERTISE_LEVELS[$info->level] ?? $info->level) : $info->level;
+            }
+
+            if (null !== $info->listAs) {
+                $params['INDEX'] = (string) $info->listAs;
+            }
+
+            $this->entry($name, $info->value, (string) $key, [], null, $info->label, $info->vCardParams, '/personalInfo/'.$key, $params);
+        }
+
+        $this->unwrittenEntries('personalInfo', new Card(personalInfo: $unwritten), \count($card->personalInfo));
     }
 
     /**
@@ -839,7 +914,8 @@ final class Exporter
             'links' => $card->links, 'notes' => $card->notes, 'organizations' => $card->organizations,
             'titles' => $card->titles, 'anniversaries' => $card->anniversaries, 'media' => $card->media,
             'cryptoKeys' => $card->cryptoKeys, 'directories' => $card->directories, 'calendars' => $card->calendars,
-            'schedulingAddresses' => $card->schedulingAddresses,
+            'schedulingAddresses' => $card->schedulingAddresses, 'preferredLanguages' => $card->preferredLanguages,
+            'relatedTo' => $card->relatedTo, 'personalInfo' => $card->personalInfo,
         ];
         foreach ($maps as $map => $entries) {
             foreach ($entries as $key => $entry) {
@@ -953,7 +1029,7 @@ final class Exporter
 
     private function collectGroups(Card $card): void
     {
-        $objects = [$card->name, $card->speakToAs, ...$card->media, ...$card->cryptoKeys, ...$card->directories, ...$card->calendars, ...$card->schedulingAddresses, ...$card->speakToAs->pronouns ?? [], ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
+        $objects = [$card->name, $card->speakToAs, ...$card->preferredLanguages, ...$card->relatedTo, ...$card->personalInfo, ...$card->media, ...$card->cryptoKeys, ...$card->directories, ...$card->calendars, ...$card->schedulingAddresses, ...$card->speakToAs->pronouns ?? [], ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
         foreach ($objects as $object) {
             $group = $object?->vCardParams['group'] ?? null;
             if (\is_string($group)) {

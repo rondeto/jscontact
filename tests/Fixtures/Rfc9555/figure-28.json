@@ -1,0 +1,4 @@
+{"personalInfo": {
+  "PERSINFO-1": {"kind": "expertise", "value": "Chinese literature", "level": "low", "listAs": 2},
+  "PERSINFO-2": {"kind": "expertise", "value": "chemistry", "level": "high", "listAs": 1}
+}}

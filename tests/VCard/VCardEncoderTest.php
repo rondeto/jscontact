@@ -10,13 +10,16 @@ use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
+use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\Model\SpeakToAs;
 use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
@@ -179,5 +182,32 @@ final class VCardEncoderTest extends TestCase
         $v30 = new VCardEncoder()->encode(new Card(media: ['m1' => $card->media['m1'], 'm2' => $card->media['m2']]), VCardVersion::V30);
         self::assertStringContainsString("PHOTO;ENCODING=b;PROP-ID=m1;TYPE=JPEG:/9j/4AAQ\r\n", $v30->value);
         self::assertStringContainsString("LOGO;VALUE=uri;PROP-ID=m2;TYPE=PNG:https://example.com/a,b.png\r\n", $v30->value);
+    }
+
+    public function testLanguagesRelationsAndPersonalInfo(): void
+    {
+        $card = new Card(
+            preferredLanguages: ['l1' => new LanguagePref('fr', ['work'], 1)],
+            relatedTo: [
+                'https://example.com/jane.vcf' => new Relation(['friend', 'example.com:mentor']),
+                'My deputy, John' => new Relation(),
+            ],
+            personalInfo: [
+                'p1' => new PersonalInfo('expertise', 'chemistry', 'high', 1),
+                'p2' => new PersonalInfo('example.com:skill', 'juggling'),
+            ],
+        );
+
+        $result = new VCardEncoder()->encode($card);
+
+        self::assertStringContainsString("LANG;PREF=1;PROP-ID=l1;TYPE=work:fr\r\n", $result->value);
+        self::assertStringContainsString("RELATED;TYPE=friend:https://example.com/jane.vcf\r\n", $result->value);
+        self::assertStringContainsString("RELATED;VALUE=text:My deputy\\, John\r\n", $result->value);
+        self::assertStringContainsString("EXPERTISE;LEVEL=expert;INDEX=1;PROP-ID=p1:chemistry\r\n", $result->value);
+        self::assertSame([
+            '/relatedTo/https:~1~1example.com~1jane.vcf/relation/example.com:mentor: vCard has no TYPE for this relation, wrote it as JSPROP',
+            '/personalInfo/p2: vCard has no personal information of kind "example.com:skill", wrote it as JSPROP',
+        ], array_map(strval(...), $result->issues));
+        self::assertEquals($card, new VCardDecoder()->decode($result->value)[0]->value ?? null);
     }
 }

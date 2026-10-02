@@ -47,6 +47,9 @@ final readonly class Card
      * @param array<array-key, Directory>         $directories
      * @param array<array-key, Calendar>          $calendars
      * @param array<array-key, SchedulingAddress> $schedulingAddresses
+     * @param array<array-key, LanguagePref>      $preferredLanguages
+     * @param array<array-key, Relation>          $relatedTo           The uid of each related Card, and how it relates
+     * @param array<array-key, PersonalInfo>      $personalInfo
      * @param array<array-key, EmailAddress>      $emails
      * @param array<array-key, Phone>             $phones
      * @param array<array-key, Address>           $addresses
@@ -106,6 +109,12 @@ final readonly class Card
         public array $calendars = [],
         #[Constraint\IdKeys, Assert\Valid]
         public array $schedulingAddresses = [],
+        #[Constraint\IdKeys, Assert\Valid]
+        public array $preferredLanguages = [],
+        #[Constraint\RelatedToKeys, Assert\Valid]
+        public array $relatedTo = [],
+        #[Constraint\IdKeys, Assert\Valid]
+        public array $personalInfo = [],
         #[Constraint\RegisteredValue]
         public array $keywords = [],
         #[Assert\Regex('/^[A-Za-z0-9-]+$/', message: 'not a vCard property name')]

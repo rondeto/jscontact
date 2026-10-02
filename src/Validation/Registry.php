@@ -16,7 +16,7 @@ final class Registry
      * Card::$extra.
      */
     public const array UNMODELED_CARD_PROPERTIES = [
-        'relatedTo', 'preferredLanguages', 'localizations', 'personalInfo',
+        'localizations',
     ];
 
     /**
@@ -43,6 +43,15 @@ final class Registry
     public const array DIRECTORY_KINDS = ['directory', 'entry'];
 
     public const array CALENDAR_KINDS = ['calendar', 'freeBusy'];
+
+    public const array RELATION_TYPES = [
+        'acquaintance', 'agent', 'child', 'co-resident', 'co-worker', 'colleague', 'contact', 'crush', 'date',
+        'emergency', 'friend', 'kin', 'me', 'met', 'muse', 'neighbor', 'parent', 'sibling', 'spouse', 'sweetheart',
+    ];
+
+    public const array PERSONAL_INFO_KINDS = ['expertise', 'hobby', 'interest'];
+
+    public const array PERSONAL_INFO_LEVELS = ['high', 'medium', 'low'];
 
     public const array GRAMMATICAL_GENDERS = ['animate', 'common', 'feminine', 'inanimate', 'masculine', 'neuter'];
 
