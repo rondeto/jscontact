@@ -257,6 +257,54 @@ final class VCardDecoderTest extends TestCase
         ], array_map(strval(...), $result->issues));
     }
 
+    public function testGeographyGoesToTheAddressOfItsGroup(): void
+    {
+        $card = $this->decode(implode("\r\n", [
+            'item1.ADR:;;1 Main St;Paris;;;',
+            'item1.GEO:geo:48.85,2.35',
+            'item1.TZ:Europe/Paris',
+            'ADR:;;2 Side St;Lyon;;;',
+            'GEO:geo:45.76,4.83',
+            '',
+        ]))->value;
+
+        // The vCard uses groups, so the ungrouped GEO goes to the ungrouped ADR (RFC 9555, section 2.8.3).
+        self::assertSame(['ADDR-1', 'ADDR-2'], array_keys($card->addresses));
+        self::assertSame(['geo:48.85,2.35', 'Europe/Paris'], [$card->addresses['ADDR-1']->coordinates ?? null, $card->addresses['ADDR-1']->timeZone ?? null]);
+        self::assertSame('geo:45.76,4.83', $card->addresses['ADDR-2']->coordinates ?? null);
+    }
+
+    public function testUngroupedGeographyMakesAnAddressOfItsOwn(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'ADR:;;1 Main St;Paris;;;',
+            'GEO:48.85;2.35',
+            'TZ:-05:00',
+            'TZ:+05:30',
+            '',
+        ]), '3.0');
+
+        self::assertEquals(new Address(coordinates: 'geo:48.85,2.35', timeZone: 'Etc/GMT+5'), $result->value->addresses['GEO-1'] ?? null);
+        self::assertNull($result->value->addresses['ADDR-1']->coordinates ?? null);
+        self::assertSame(['/vCardProps/0: kept TZ verbatim: not a time zone, nor a UTC offset in whole hours from -12 to +14'], array_map(strval(...), $result->issues));
+    }
+
+    public function testGeographyWithParametersOrForAFilledAddressIsNotMerged(): void
+    {
+        $card = $this->decode(implode("\r\n", [
+            'item1.ADR;GEO="geo:1,1":;;1 Main St;Paris;;;',
+            'item1.GEO:geo:2,2',
+            'item2.ADR:;;2 Side St;Lyon;;;',
+            'item2.GEO;TYPE=work:geo:3,3',
+            '',
+        ]))->value;
+
+        self::assertSame('geo:1,1', $card->addresses['ADDR-1']->coordinates ?? null);
+        self::assertEquals(new Address(coordinates: 'geo:2,2', vCardParams: ['group' => 'item1']), $card->addresses['GEO-1'] ?? null);
+        self::assertNull($card->addresses['ADDR-2']->coordinates ?? null);
+        self::assertEquals(new Address(coordinates: 'geo:3,3', contexts: ['work'], vCardParams: ['group' => 'item2']), $card->addresses['GEO-2'] ?? null);
+    }
+
     public function testRepeatedValueParametersAreReported(): void
     {
         $result = $this->decode("PRODID;VALUE=text;VALUE=TEXT:App\r\n");

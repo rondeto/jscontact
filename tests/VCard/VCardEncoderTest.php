@@ -210,4 +210,28 @@ final class VCardEncoderTest extends TestCase
         ], array_map(strval(...), $result->issues));
         self::assertEquals($card, new VCardDecoder()->decode($result->value)[0]->value ?? null);
     }
+
+    public function testAnAddressWithOnlyCoordinatesAndTimeZoneIsWrittenAsGeoAndTz(): void
+    {
+        $alone = new Card(addresses: ['a1' => new Address(coordinates: 'geo:48.85,2.35', timeZone: 'Etc/GMT+5', contexts: ['work'])]);
+
+        $v40 = new VCardEncoder()->encode($alone)->value;
+        self::assertStringContainsString("GEO;PROP-ID=a1;TYPE=work:geo:48.85,2.35\r\nTZ:Etc/GMT+5\r\n", $v40);
+        self::assertEquals($alone, new VCardDecoder()->decode($v40)[0]->value ?? null);
+
+        $v30 = new VCardEncoder()->encode($alone, VCardVersion::V30)->value;
+        self::assertStringContainsString("GEO;PROP-ID=a1;TYPE=work:48.85;2.35\r\nTZ:-05:00\r\n", $v30);
+        self::assertEquals($alone, new VCardDecoder()->decode($v30)[0]->value ?? null);
+
+        // With another address, GEO and TZ share a group to come back together.
+        $withOther = new Card(addresses: [
+            'a1' => new Address(coordinates: 'geo:1,1', full: '1 Main St, Paris'),
+            'a2' => new Address(coordinates: 'geo:2,2', timeZone: 'Europe/Paris'),
+        ]);
+        $v40 = new VCardEncoder()->encode($withOther)->value;
+        self::assertStringContainsString('ADR;LABEL="1 Main St, Paris";GEO="geo:1,1";PROP-ID=a1:;;;;;;', $v40);
+        self::assertStringContainsString("item1.GEO;PROP-ID=a2:geo:2,2\r\nitem1.TZ:Europe/Paris\r\n", $v40);
+        $again = new VCardDecoder()->decode($v40)[0]->value ?? null;
+        self::assertSame('Europe/Paris', $again?->addresses['a2']->timeZone);
+    }
 }

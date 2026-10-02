@@ -49,7 +49,7 @@ contact data, and for converting between vCard and JSContact.
 | speakToAs (GRAMGENDER, PRONOUNS)                 | ✅ Done     |
 | Media, keys, directories, calendars              | ✅ Done     |
 | Languages, relations, personal information       | ✅ Done     |
-| Card-level GEO and TZ                            | ⏳ Planned  |
+| Card-level GEO and TZ                            | ✅ Done     |
 | Localizations (LANGUAGE and ALTID alternatives)  | ⏳ Planned  |
 
 Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `members`, `name`, `speakToAs`, `nicknames`,
@@ -59,7 +59,7 @@ Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `me
 the RFC 9555 properties `vCardName`, `vCardParams` and `vCardProps`.
 
 Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
-back unchanged. vCard properties that are not converted yet (card-level GEO and TZ, localized alternatives…) and vendor extensions are
+back unchanged. vCard properties that are not converted yet (localized alternatives…) and vendor extensions are
 kept verbatim in `vCardProps`, as RFC 9555 allows, and written back unchanged.
 
 ## Usage

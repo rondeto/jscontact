@@ -116,7 +116,7 @@ final class Exporter
         }
 
         foreach ($card->addresses as $key => $address) {
-            $this->address((string) $key, $address);
+            $this->address((string) $key, $address, \count($card->addresses));
         }
 
         foreach ($card->onlineServices as $key => $service) {
@@ -287,9 +287,15 @@ final class Exporter
         $this->entry('TEL', $phone->number, $key, $phone->contexts, $phone->pref, $phone->label, $phone->vCardParams, '/phones/'.$key, $params, $types);
     }
 
-    private function address(string $key, Address $address): void
+    private function address(string $key, Address $address, int $count): void
     {
         $path = '/addresses/'.$key;
+        if ($this->isGeographyOnly($address)) {
+            $this->geography($key, $address, $path, $count > 1);
+
+            return;
+        }
+
         if (null !== $address->phoneticSystem || null !== $address->phoneticScript) {
             $this->issues->add($path, 'phonetic addresses are not converted to vCard yet, left the phonetics out');
         }
@@ -354,6 +360,58 @@ final class Exporter
         }
 
         $this->entry('ADR', $this->structured($components), $key, $address->contexts, $address->pref, null, $address->vCardParams, $path, $params);
+    }
+
+    /**
+     * An address with nothing but coordinates and a time zone, which converts to GEO and TZ
+     * rather than to an empty ADR (RFC 9555, section 2.8).
+     */
+    private function isGeographyOnly(Address $address): bool
+    {
+        return (null !== $address->coordinates || null !== $address->timeZone)
+            && [] === $address->components && null === $address->full && null === $address->countryCode
+            && null === $address->phoneticSystem && null === $address->phoneticScript;
+    }
+
+    /**
+     * GEO and TZ. When both are set and the Card has other addresses, they share a group so
+     * that they convert back to one address (RFC 9555, section 2.8.3); alone, ungrouped GEO
+     * and TZ convert back to one address anyway. The key, contexts and preference go on the
+     * first one.
+     */
+    private function geography(string $key, Address $address, string $path, bool $hasOtherAddresses): void
+    {
+        $values = [];
+        if (null !== $address->coordinates) {
+            $value = Geography::formatCoordinates($address->coordinates, $this->version);
+            if (null === $value) {
+                $this->issues->add($path.'/coordinates', 'vCard 3.0 GEO is a latitude and longitude pair, wrote the URI anyway');
+                $value = $address->coordinates;
+            }
+
+            $values['GEO'] = [$value, []];
+        }
+
+        if (null !== $address->timeZone) {
+            $offset = VCardVersion::V30 === $this->version ? Geography::utcOffset($address->timeZone) : null;
+            // vCard 3.0 TZ is a UTC offset by default, vCard 4.0 TZ a text.
+            $values['TZ'] = null !== $offset ? [$offset, []] : [$address->timeZone, VCardVersion::V30 === $this->version ? ['VALUE' => 'text'] : []];
+        }
+
+        $group = \is_string($address->vCardParams['group'] ?? null) ? $address->vCardParams['group'] : null;
+        if (\count($values) > 1 && $hasOtherAddresses) {
+            $group ??= $this->newGroup();
+        }
+
+        $first = true;
+        foreach ($values as $name => [$value, $params]) {
+            if ($first) {
+                $this->entry($name, $value, $key, $address->contexts, $address->pref, null, $address->vCardParams, $path, $params, group: $group, raw: true);
+                $first = false;
+            } else {
+                $this->add($name, $value, $params, $group, $path, raw: true);
+            }
+        }
     }
 
     private function onlineService(string $key, OnlineService $service): void

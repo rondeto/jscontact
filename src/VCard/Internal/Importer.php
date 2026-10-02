@@ -192,6 +192,12 @@ final class Importer
     /** @var array<string, PersonalInfo> */
     private array $personalInfo = [];
 
+    /** @var list<PropertyReader> GEO and TZ properties, GEO first */
+    private array $geography = [];
+
+    /** Whether any ADR, GEO or TZ property has a group (RFC 9555, section 2.8.3). */
+    private bool $hasGeographyGroups = false;
+
     /** @var array<string, Anniversary> */
     private array $anniversaries = [];
 
@@ -252,9 +258,12 @@ final class Importer
         $this->matchRawValues($properties);
         $this->collectLabels($properties);
         foreach ($properties as $property) {
+            $this->hasGeographyGroups = $this->hasGeographyGroups || (null !== $property->group && \in_array($property->name, ['ADR', 'GEO', 'TZ'], true));
             $propId = $property->peek('PROP-ID');
             if (isset(self::ENTRIES[$property->name]) && null !== $propId && Syntax::isId($propId)) {
                 $this->keys->reserve(self::ENTRIES[$property->name][0], $propId);
+            } elseif (\in_array($property->name, ['GEO', 'TZ'], true) && null !== $propId && Syntax::isId($propId)) {
+                $this->keys->reserve('addresses', $propId);
             }
         }
 
@@ -269,6 +278,7 @@ final class Importer
         $name = $this->name();
         $this->linkTitles();
         $this->anniversaries();
+        $this->geography();
         foreach ($this->labels as $label) {
             $this->raw($label); // No entry of its group has a label property.
         }
@@ -337,6 +347,7 @@ final class Importer
             'BDAY', 'DEATHDATE', 'ANNIVERSARY' => $this->dates[] = $property,
             'GRAMGENDER' => $this->grammaticalGender($property),
             'PRONOUNS' => $this->pronoun($property),
+            'GEO', 'TZ' => $this->geography[] = $property,
             'LANG' => $this->language($property),
             'RELATED' => $this->related($property),
             'EXPERTISE', 'HOBBY', 'INTEREST' => $this->personalInfo($property),
@@ -696,6 +707,114 @@ final class Importer
     }
 
     /**
+     * GEO and TZ convert to the coordinates and time zone of an address (RFC 9555, section
+     * 2.8). They go to the address converted from the ADR of their group, and, when the
+     * vCard uses groups for these properties, ungrouped ones to the ungrouped ADR (section
+     * 2.8.3). Otherwise, or when that address already has a value, or the property has
+     * parameters the address cannot hold, they make an address of their own, shared by the
+     * GEO and TZ of the same group, ungrouped ones included.
+     */
+    private function geography(): void
+    {
+        usort($this->geography, static fn (PropertyReader $a, PropertyReader $b): int => ('TZ' === $a->name) <=> ('TZ' === $b->name));
+        $own = [];
+        foreach ($this->geography as $property) {
+            $isGeo = 'GEO' === $property->name;
+            $value = $isGeo ? Geography::coordinates($property->text()) : null;
+            if (!$isGeo && 'uri' !== strtolower($property->peek('VALUE') ?? '')) {
+                $value = Geography::timeZone($property->text());
+            }
+
+            if (null === $value) {
+                $this->keys->skip($property->name);
+                $this->raw($property, $isGeo ? 'not coordinates' : 'not a time zone, nor a UTC offset in whole hours from -12 to +14');
+                continue;
+            }
+
+            $field = $isGeo ? 'coordinates' : 'timeZone';
+
+            // The address of the ADR in the same group, or the ungrouped one.
+            $key = null;
+            if ([] === $property->unreadParameterNames() && (null !== $property->group || $this->hasGeographyGroups)) {
+                $candidates = array_keys(array_filter($this->addresses, static fn (Address $address): bool => ($address->vCardParams['group'] ?? null) === $property->group));
+                $key = 1 === \count($candidates) ? (string) $candidates[0] : null;
+            }
+
+            // Or the address of its own made by the GEO of the same group.
+            $key ??= $own[$property->group ?? ''] ?? null;
+            if (null !== $key && null === $this->addresses[$key]->{$field} && [] === $property->unreadParameterNames()) {
+                $this->addresses[$key] = $this->withGeography($this->addresses[$key], $field, $value);
+                // Each GEO and TZ takes its position, so that keys do not depend on merges.
+                $this->keys->skip($property->name);
+                continue;
+            }
+
+            $common = $this->geographyCommon($property);
+            $this->addresses[$common->key] = new Address(
+                coordinates: $isGeo ? $value : null,
+                timeZone: $isGeo ? null : $value,
+                contexts: $common->contexts,
+                pref: $common->pref,
+                vCardParams: $common->vCardParams,
+            );
+            $own[$property->group ?? ''] ??= $common->key;
+        }
+    }
+
+    private function geographyCommon(PropertyReader $property): Common
+    {
+        $propId = $property->parameter('PROP-ID');
+        $prefix = $property->name;
+        if (null !== $propId && Syntax::isId($propId) && !isset($this->addresses[$propId])) {
+            $key = $propId;
+            $this->keys->skip($prefix);
+        } else {
+            if (null !== $propId) {
+                $this->issues->add('', \sprintf('%s: PROP-ID "%s" is not a valid or unique Id, generated another key', $property->name, $propId));
+            }
+
+            $key = $this->keys->next('addresses', $prefix);
+        }
+
+        $pref = $property->parameter('PREF');
+        $contexts = [];
+        foreach (['home' => 'private', 'work' => 'work', 'billing' => 'billing', 'delivery' => 'delivery'] as $type => $context) {
+            if ($property->takeType($type)) {
+                $contexts[] = $context;
+            }
+        }
+
+        return new Common(
+            key: $key,
+            contexts: $contexts,
+            pref: null !== $pref && 1 === preg_match('/^\d+$/', $pref) && (int) $pref >= 1 && (int) $pref <= 100 ? (int) $pref : null,
+            label: null,
+            vCardName: null,
+            vCardParams: $property->unreadParameters(),
+        );
+    }
+
+    private function withGeography(Address $address, string $field, string $value): Address
+    {
+        return new Address(
+            components: $address->components,
+            isOrdered: $address->isOrdered,
+            countryCode: $address->countryCode,
+            coordinates: 'coordinates' === $field ? $value : $address->coordinates,
+            timeZone: 'timeZone' === $field ? $value : $address->timeZone,
+            contexts: $address->contexts,
+            full: $address->full,
+            defaultSeparator: $address->defaultSeparator,
+            pref: $address->pref,
+            phoneticScript: $address->phoneticScript,
+            phoneticSystem: $address->phoneticSystem,
+            vCardName: $address->vCardName,
+            vCardParams: $address->vCardParams,
+            extra: $address->extra,
+        );
+    }
+
+    /**
      * LANG converts to a preferred language (RFC 9555, section 2.7.3).
      */
     private function language(PropertyReader $property): void
@@ -1045,6 +1164,12 @@ final class Importer
         $main = array_shift($this->names);
         foreach ($this->names as $extra) {
             $this->raw($extra, 'more than one N property');
+        }
+
+        // An empty N is what converting a Card without name components gives in vCard 3.0,
+        // where N is mandatory (RFC 2426, section 3.1.2).
+        if (null !== $main && [] === Components::fromName($main->structured($this->rawValue($main))) && [] === $main->unreadParameters() && [] === $this->phonetics) {
+            $main = null;
         }
 
         $full = $this->fullName(null !== $main);
