@@ -7,8 +7,8 @@ namespace Rondeto\JSContact\VCard\Internal;
 /**
  * Escaping and splitting of vCard text values (RFC 6350, sections 3.4 and 4.1).
  *
- * sabre/vobject unescapes structured values before splitting their lists, so it cannot tell
- * "a\,b" (one value) from "a,b" (two values): structured values are split here instead.
+ * sabre/vobject workaround: sabre unescapes structured values before splitting their lists,
+ * so it cannot tell "a\,b" (one value) from "a,b" (two values): they are split here instead.
  *
  * @internal
  */

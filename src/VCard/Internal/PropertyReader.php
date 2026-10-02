@@ -165,7 +165,8 @@ final class PropertyReader
             return VCardText::splitStructured($raw);
         }
 
-        // Without the raw value, escaped commas cannot be told apart from list separators.
+        // sabre/vobject workaround (fallback): without the raw value, escaped commas cannot be
+        // told apart from list separators, since sabre has already unescaped them.
         return array_map(
             static fn (mixed $component): array => \is_string($component) && '' !== $component ? explode(',', $component) : [],
             array_values($this->property->getParts()),
@@ -186,6 +187,8 @@ final class PropertyReader
             $jCard = [$this->name, [], 'unknown', $this->property->getRawMimeDirValue()];
         }
 
+        // sabre/vobject workaround: sabre unescapes the values of unknown properties, and
+        // joins the parts of quoted-printable ones with commas; the raw value is the right one.
         if ('unknown' === ($jCard[2] ?? null) && null !== $raw) {
             $jCard = [$jCard[0], $jCard[1], 'unknown', $raw];
         }

@@ -7,8 +7,9 @@ namespace Rondeto\JSContact\VCard\Internal;
 use Sabre\VObject\Property\Unknown;
 
 /**
- * A property of unknown type, written exactly as read: jCard keeps the raw value of such
- * properties (RFC 7095, section 5), which sabre/vobject would otherwise escape again.
+ * sabre/vobject workaround: a property of unknown type, written exactly as read. jCard keeps
+ * the raw value of such properties (RFC 7095, section 5), which sabre/vobject would
+ * otherwise escape again.
  *
  * @internal
  */

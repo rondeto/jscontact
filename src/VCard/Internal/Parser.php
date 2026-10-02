@@ -62,6 +62,8 @@ final class Parser
 
             $colon = self::valueSeparator($line);
             if (null === $colon) {
+                // sabre/vobject workaround: with OPTION_IGNORE_INVALID_LINES, sabre drops such
+                // lines without telling, or reads them as a property named after their start.
                 $issues[] = \sprintf('line %d is not a vCard property, ignored it', $number);
                 continue;
             }
@@ -70,6 +72,8 @@ final class Parser
             $parts = explode(';', $head);
             $name = strtoupper((string) preg_replace('/^.*\./', '', $parts[0]));
 
+            // sabre/vobject workaround: a repeated VALUE parameter makes sabre 5.0 throw a
+            // TypeError (Document::getClassNameForPropertyValue() gets an array).
             $values = preg_grep('/^VALUE=/i', \array_slice($parts, 1)) ?: [];
             if (\count($values) > 1) {
                 $issues[] = \sprintf('line %d repeats the VALUE parameter, kept the first one', $number);
@@ -78,6 +82,10 @@ final class Parser
                 $line = $head.substr($line, $colon);
             }
 
+            // sabre/vobject workaround: keep the raw value, as sabre loses information once it
+            // has parsed it. It cannot tell an escaped comma from a list separator in N and ADR,
+            // unescapes the values of unknown properties (jCard keeps them raw: RFC 7095,
+            // section 5), and joins the parts of quoted-printable ones with commas.
             $value = substr($line, \strlen($head) + 1);
             if (1 === preg_match('/;ENCODING=QUOTED-PRINTABLE/i', $head)) {
                 $value = quoted_printable_decode($value);
@@ -94,6 +102,8 @@ final class Parser
         try {
             $vCard = Reader::read(implode("\r\n", $kept)."\r\n", Reader::OPTION_FORGIVING | Reader::OPTION_IGNORE_INVALID_LINES);
         } catch (ParseException|\TypeError $e) {
+            // sabre/vobject workaround: sabre 5.0 throws TypeErrors, not only
+            // ParseExceptions, on some malformed input.
             return new ParsedCard(null, $raw, [...$issues, 'not a valid vCard: '.$e->getMessage()]);
         }
 

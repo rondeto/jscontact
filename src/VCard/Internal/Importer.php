@@ -260,6 +260,8 @@ final class Importer
     }
 
     /**
+     * sabre/vobject workaround: see Parser for why raw values are needed.
+     *
      * Pairs properties with their raw values, checking each pair: should sabre have dropped
      * a line the Parser kept, the values would not match. Only N, ADR and unknown
      * properties need them.

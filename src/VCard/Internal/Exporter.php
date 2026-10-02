@@ -460,7 +460,9 @@ final class Exporter
                 }
 
                 if ('unknown' === $property->type && \is_string($property->values[0] ?? null) && 1 === \count($property->values)) {
-                    // jCard keeps the raw value of unknown types (RFC 7095, section 5): no escaping.
+                    // sabre/vobject workaround: jCard keeps the raw value of unknown types (RFC
+                    // 7095, section 5), but sabre escapes it again when writing; it also adds a
+                    // VALUE=UNKNOWN parameter, which is not a vCard value type.
                     $parameters = [];
                     foreach ($child->parameters() as $name => $parameter) {
                         if ('VALUE' !== $name) {
