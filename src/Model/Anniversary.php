@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A memorable date: birth, death, wedding… (RFC 9553, section 2.8.1).
  */
 #[Constraint\ExtraProperties]
-final readonly class Anniversary
+final class Anniversary
 {
     public const string KIND_BIRTH = 'birth';
 

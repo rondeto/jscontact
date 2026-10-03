@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A language to contact the entity a Card represents in (RFC 9553, section 2.3.4).
  */
 #[Constraint\ExtraProperties]
-final readonly class LanguagePref
+final class LanguagePref
 {
     /**
      * @param string                             $language    An RFC 5646 language tag, such as "fr" or "de-AT"

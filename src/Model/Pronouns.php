@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * section 2.2.4).
  */
 #[Constraint\ExtraProperties]
-final readonly class Pronouns
+final class Pronouns
 {
     /**
      * @param string                             $pronouns    Free text

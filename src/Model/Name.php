@@ -15,7 +15,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[Constraint\Components]
 #[Constraint\SortAs]
 #[Constraint\ExtraProperties]
-final readonly class Name
+final class Name
 {
     /**
      * @param list<NameComponent>                $components

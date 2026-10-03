@@ -15,7 +15,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[Constraint\AtLeastOneProperty(['grammaticalGender', 'pronouns'], 'needs a grammatical gender, pronouns, or both')]
 #[Constraint\ExtraProperties]
-final readonly class SpeakToAs
+final class SpeakToAs
 {
     public const string GENDER_ANIMATE = 'animate';
 

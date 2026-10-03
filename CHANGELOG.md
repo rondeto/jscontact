@@ -17,6 +17,7 @@ All notable changes to this project are documented in this file. The format foll
 - **Breaking**: `VCardEncoder::encode()` and `convert()` take a `Target` instead of a `VCardVersion`, and the
   `VCardEncoder` constructor no longer takes dialects. Dialects write in the order given, no longer in
   reverse.
+- Model classes are no longer read-only: edit a Card by setting its properties.
 
 ## [0.1.0] - 2026-10-03
 

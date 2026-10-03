@@ -88,7 +88,7 @@ in `vCardParams` and comes back when the Card is written to vCard again.
 
 ### The model
 
-A contact is a `Rondeto\JSContact\Model\Card`, a read-only object whose properties follow the JSContact
+A contact is a `Rondeto\JSContact\Model\Card`, a plain object whose properties follow the JSContact
 specification: `name`, `emails`, `phones`, `addresses`, `organizations`, `relatedTo`, and so on. Every
 class lives in [`src/Model`](src/Model).
 
@@ -144,6 +144,46 @@ foreach ((new VCardDecoder())->decode(file_get_contents('contacts.vcf')) as $res
 // Writes vCard 4.0 by default.
 $result = (new VCardEncoder())->encode($card, new Target(VCardVersion::V30));
 file_put_contents('contact.vcf', $result->value);
+```
+
+### Editing a Card
+
+Model objects are plain PHP objects: change their properties directly.
+
+```php
+use Rondeto\JSContact\Model\Context;
+use Rondeto\JSContact\Model\Phone;
+
+$card = (new VCardDecoder())->decode($vCard)[0]->value;
+
+$card->name->full = 'Jane Doe';
+$card->emails['EMAIL-1']->address = 'jane@example.com';
+$card->phones['work'] = new Phone('+33 1 23 45 67 89', contexts: [Context::WORK]);
+unset($card->notes['NOTE-1']);
+
+$vCard = (new VCardEncoder())->encode($card)->value;
+```
+
+Choose the key of a new entry (`'work'` above): `$card->phones[] = …` would give it the key `0`. Keys
+identify an entry across versions of a Card, see [Identifiers](#identifiers).
+
+Changes are not checked when they are made: the encoders validate the Card when they write it, or call
+`CardValidator` yourself.
+
+#### Copying a Card
+
+`clone $card` copies the Card, not the objects inside it: changing `$copy->name->full` also changes the
+original. To get an independent copy, use [`myclabs/deep-copy`](https://github.com/myclabs/DeepCopy):
+
+```bash
+composer require myclabs/deep-copy
+```
+
+```php
+use DeepCopy\DeepCopy;
+
+$copy = (new DeepCopy())->copy($card);
+$copy->name->full = 'John Doe'; // $card is unchanged
 ```
 
 ### Issues and strict mode

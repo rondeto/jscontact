@@ -14,7 +14,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * (RFC 9553, section 2.4.1).
  */
 #[Constraint\ExtraProperties]
-final readonly class Calendar
+final class Calendar
 {
     public const string KIND_CALENDAR = 'calendar';
 

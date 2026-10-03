@@ -10,7 +10,7 @@ namespace Rondeto\JSContact\Model;
  * Each key is a path relative to the Card, like "titles/t1/name" or "name/components/0/value";
  * each value is the JSON value to set there, or null to remove it.
  */
-final readonly class PatchObject
+final class PatchObject
 {
     /**
      * @param array<array-key, mixed> $patches Values by path: a JSON pointer without its leading "/", relative to the Card

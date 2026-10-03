@@ -11,7 +11,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A vCard property kept verbatim in Card::$vCardProps, in its jCard form (RFC 7095,
  * section 3.3; RFC 9555, section 2.15.1).
  */
-final readonly class VCardProperty
+final class VCardProperty
 {
     /**
      * @param string                             $name       The lowercase property name, e.g. "x-foo"

@@ -43,6 +43,9 @@
         "phpunit/phpunit": "^13.3",
         "rector/rector": "^2.6"
     },
+    "suggest": {
+        "myclabs/deep-copy": "To copy a Card with its nested objects"
+    },
     "conflict": {
         "symfony/translation-contracts": "<2.5.3 || >=3.0,<3.4.2"
     },

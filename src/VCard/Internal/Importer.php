@@ -808,7 +808,7 @@ final class Importer
      */
     private function linkTitles(): void
     {
-        foreach ($this->titles as $key => $title) {
+        foreach ($this->titles as $title) {
             $group = $title->vCardParams['group'] ?? null;
             if (!\is_string($group)) {
                 continue;
@@ -816,12 +816,7 @@ final class Importer
 
             $organizations = array_keys(array_filter($this->organizations, static fn (Organization $organization): bool => ($organization->vCardParams['group'] ?? null) === $group));
             if (1 === \count($organizations)) {
-                $this->titles[$key] = new Title(
-                    name: $title->name,
-                    kind: $title->kind,
-                    organizationId: (string) $organizations[0],
-                    vCardParams: $title->vCardParams,
-                );
+                $title->organizationId = (string) $organizations[0];
             }
         }
     }
@@ -863,7 +858,7 @@ final class Importer
             // Or the address of its own made by the GEO of the same group.
             $key ??= $own[$property->group ?? ''] ?? null;
             if (null !== $key && null === $this->addresses[$key]->{$field} && [] === $property->unreadParameterNames()) {
-                $this->addresses[$key] = $this->withGeography($this->addresses[$key], $field, $value);
+                $this->addresses[$key]->{$field} = $value;
                 // Each GEO and TZ takes its position, so that keys do not depend on merges.
                 $this->keys->skip($property->name);
                 continue;
@@ -911,26 +906,6 @@ final class Importer
             label: null,
             vCardName: null,
             vCardParams: $property->unreadParameters(),
-        );
-    }
-
-    private function withGeography(Address $address, string $field, string $value): Address
-    {
-        return new Address(
-            components: $address->components,
-            isOrdered: $address->isOrdered,
-            countryCode: $address->countryCode,
-            coordinates: 'coordinates' === $field ? $value : $address->coordinates,
-            timeZone: 'timeZone' === $field ? $value : $address->timeZone,
-            contexts: $address->contexts,
-            full: $address->full,
-            defaultSeparator: $address->defaultSeparator,
-            pref: $address->pref,
-            phoneticScript: $address->phoneticScript,
-            phoneticSystem: $address->phoneticSystem,
-            vCardName: $address->vCardName,
-            vCardParams: $address->vCardParams,
-            extra: $address->extra,
         );
     }
 
@@ -1465,18 +1440,7 @@ final class Importer
             }
 
             $this->issues->add('', 'kept the JSPROP properties verbatim: '.$error);
-            $card = new Card(
-                uid: $card->uid, prodId: $card->prodId, created: $card->created, updated: $card->updated,
-                kind: $card->kind, language: $card->language, members: $card->members, name: $card->name,
-                speakToAs: $card->speakToAs,
-                nicknames: $card->nicknames, organizations: $card->organizations, titles: $card->titles,
-                emails: $card->emails, phones: $card->phones,
-                addresses: $card->addresses, onlineServices: $card->onlineServices, links: $card->links,
-                notes: $card->notes, anniversaries: $card->anniversaries, media: $card->media,
-                cryptoKeys: $card->cryptoKeys, directories: $card->directories, calendars: $card->calendars,
-                schedulingAddresses: $card->schedulingAddresses, preferredLanguages: $card->preferredLanguages,
-                relatedTo: $card->relatedTo, personalInfo: $card->personalInfo, keywords: $card->keywords, vCardProps: $this->vCardProps,
-            );
+            $card->vCardProps = $this->vCardProps;
 
             return new Result($card, [...$this->issues->all(), ...$this->validator->validate($card)]);
         }

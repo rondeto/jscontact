@@ -11,7 +11,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A point in time, for an Anniversary (RFC 9553, section 2.8.1).
  */
 #[Constraint\ExtraProperties]
-final readonly class Timestamp
+final class Timestamp
 {
     /**
      * @param string|null                        $vCardName   The name of the vCard property this object was converted from (RFC 9555, section 2.15.3)

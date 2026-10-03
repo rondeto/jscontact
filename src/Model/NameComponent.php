@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * One part of a Name (RFC 9553, section 2.2.1.2).
  */
 #[Constraint\ExtraProperties]
-final readonly class NameComponent
+final class NameComponent
 {
     public const string KIND_TITLE = 'title';
 

@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A nickname (RFC 9553, section 2.2.2).
  */
 #[Constraint\ExtraProperties]
-final readonly class Nickname
+final class Nickname
 {
     /**
      * @param list<string>                       $contexts

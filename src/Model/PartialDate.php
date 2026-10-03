@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[Constraint\PartialDateParts]
 #[Constraint\ExtraProperties]
-final readonly class PartialDate
+final class PartialDate
 {
     /**
      * @param string|null                        $calendarScale The calendar system the date occurs in, such as "hebrew"; year, month and day stay Gregorian

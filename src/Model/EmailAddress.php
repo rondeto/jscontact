@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * An email address (RFC 9553, section 2.3.1).
  */
 #[Constraint\ExtraProperties]
-final readonly class EmailAddress
+final class EmailAddress
 {
     /**
      * @param string                             $address     An RFC 5322 addr-spec

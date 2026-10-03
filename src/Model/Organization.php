@@ -15,7 +15,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[Constraint\AtLeastOneProperty(['name', 'units'], 'an organization needs a name, units, or both')]
 #[Constraint\ExtraProperties]
-final readonly class Organization
+final class Organization
 {
     /**
      * @param list<OrgUnit>                      $units       Ordered from the top of the hierarchy down

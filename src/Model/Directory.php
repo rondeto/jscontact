@@ -14,7 +14,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * section 2.6.2).
  */
 #[Constraint\ExtraProperties]
-final readonly class Directory
+final class Directory
 {
     public const string KIND_DIRECTORY = 'directory';
 
