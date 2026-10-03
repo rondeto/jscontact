@@ -37,31 +37,6 @@ contact data, and for converting between vCard and JSContact.
 - JMAP, CardDAV or any other protocol.
 - Storing, merging or deduplicating contacts.
 
-## Progress
-
-| Area                                             | Status      |
-|--------------------------------------------------|-------------|
-| Tooling and CI                                   | ✅ Done     |
-| Model and JSON: core properties                  | ✅ Done     |
-| vCard ⇄ JSContact: core properties               | ✅ Done     |
-| Organizations and titles (ORG, TITLE, ROLE)      | ✅ Done     |
-| Anniversaries (BDAY, ANNIVERSARY…)               | ✅ Done     |
-| speakToAs (GRAMGENDER, PRONOUNS)                 | ✅ Done     |
-| Media, keys, directories, calendars              | ✅ Done     |
-| Languages, relations, personal information       | ✅ Done     |
-| Card-level GEO and TZ                            | ✅ Done     |
-| Localizations (LANGUAGE and ALTID alternatives)  | ✅ Done     |
-
-Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `members`, `name`, `speakToAs`, `nicknames`,
-`organizations`, `titles`, `emails`, `phones`, `addresses`, `onlineServices`, `links`, `media`, `cryptoKeys`,
-`directories`, `calendars`, `schedulingAddresses`, `preferredLanguages`, `relatedTo`, `notes`, `anniversaries`,
-`personalInfo`, `keywords`, `localizations`, and
-the RFC 9555 properties `vCardName`, `vCardParams` and `vCardProps`.
-
-Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
-back unchanged. vCard properties that cannot be converted and vendor extensions are
-kept verbatim in `vCardProps`, as RFC 9555 allows, and written back unchanged.
-
 ## Installation
 
 ```sh
