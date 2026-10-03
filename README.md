@@ -141,7 +141,7 @@ foreach ((new VCardDecoder())->decode(file_get_contents('contacts.vcf')) as $res
     $card = $result->value;
 }
 
-// Writes vCard 4.0 by default.
+// Writes vCard 4.0, or the version a Target gives.
 $result = (new VCardEncoder())->encode($card, new Target(VCardVersion::V30));
 file_put_contents('contact.vcf', $result->value);
 ```
