@@ -89,10 +89,7 @@ final readonly class Android implements Dialect
      */
     private function readRelation(VCard $vCard, Property $property, string $name, string $type, string $label, array $params): void
     {
-        $relation = ctype_digit($type) ? (self::RELATIONS[(int) $type] ?? null) : null;
-        if ((string) self::CUSTOM === $type && \in_array(strtolower($label), Registry::RELATION_TYPES, true)) {
-            $relation = strtolower($label);
-        }
+        $relation = $this->relation($type, $label);
 
         $params['VALUE'] = ['text'];
         if (null !== $relation) {
@@ -113,19 +110,38 @@ final readonly class Android implements Dialect
     /**
      * A related entity, as a relation row: of the type it was read with, or of the type of
      * its first RELATED type, or a custom one named after it.
+     *
+     * The type it was read with stays while reading it back gives the same relation: a
+     * mother stays for a parent, a spouse goes for a friend. A row holds a single type, so
+     * a custom label of the user's own, such as "Godmother", stays only for an entity with
+     * no relation type.
      */
     private function writeRelation(VCard $vCard, Property $property): void
     {
         $types = array_map(strtolower(...), VCardEdit::parts($property, 'TYPE'));
         $type = VCardEdit::parts($property, 'X-ANDROID-TYPE')[0] ?? null;
         $label = VCardEdit::parts($property, 'X-ANDROID-LABEL')[0] ?? null;
-        if (null === $type) {
+        $relation = null === $type ? null : $this->relation($type, $label ?? '');
+        if (null === $type || (null === $relation ? [] !== $types : !\in_array($relation, $types, true))) {
             $type = (string) (self::RELATION_TYPES[$types[0] ?? ''] ?? self::CUSTOM);
             $label = (string) self::CUSTOM === $type ? ($types[0] ?? '') : '';
         }
 
         $params = VCardEdit::parameters($property, ['VALUE', 'TYPE', 'X-ANDROID-TYPE', 'X-ANDROID-LABEL']);
         $this->writeRow($vCard, $property, [self::RELATION, (string) $property, $type, $label ?? ''], $params);
+    }
+
+    /**
+     * The RELATED type an Android relation type means, if any; that of a custom relation is
+     * its label, when it names one.
+     */
+    private function relation(string $type, string $label): ?string
+    {
+        if ((string) self::CUSTOM === $type && \in_array(strtolower($label), Registry::RELATION_TYPES, true)) {
+            return strtolower($label);
+        }
+
+        return ctype_digit($type) ? (self::RELATIONS[(int) $type] ?? null) : null;
     }
 
     /**

@@ -19,6 +19,15 @@ All notable changes to this project are documented in this file. The format foll
   reverse.
 - Model classes are no longer read-only: edit a Card by setting its properties.
 
+### Fixed
+
+- The `Apple` dialect writes the built-in labels it kept, such as `_$!<Spouse>!$_`, as Apple does, instead of
+  the readable labels they were read as.
+- The Apple label or Android type a relation was read with no longer outlives a change of the relation: a
+  spouse turned friend is written as a friend.
+- `VCardEncoder` leaves out, and reports, an `X-ABLabel` of `vCardProps` whose group has no other property,
+  such as the label of a relation removed from the Card.
+
 ## [0.1.0] - 2026-10-03
 
 First release.

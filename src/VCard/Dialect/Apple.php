@@ -129,7 +129,7 @@ final readonly class Apple implements Dialect
             }
         }
 
-        $type = null === $label ? null : (self::RELATIONS[$label] ?? (\in_array($label, Registry::RELATION_TYPES, true) ? $label : null));
+        $type = null === $label ? null : $this->relation($label);
         if (null !== $type) {
             $types[] = $type;
         }
@@ -145,6 +145,10 @@ final readonly class Apple implements Dialect
     /**
      * A related entity, as a name labeled with its first relation type. Apple keeps the
      * other types in TYPE, which it ignores.
+     *
+     * The label of its group, kept from reading, stays unless it names a relation the
+     * entity no longer has: _$!<Mother>!$_ stays for a parent, _$!<Spouse>!$_ goes for a
+     * friend, and a label of the user's own, such as "Godmother", always stays.
      */
     private function writeRelation(VCard $vCard, Property $property): void
     {
@@ -155,7 +159,26 @@ final readonly class Apple implements Dialect
         }
 
         $type = $types[0] ?? 'other';
-        $this->writeLabeled($vCard, VCardEdit::replace($vCard, $property, 'X-ABRELATEDNAMES', (string) $property, $params), self::RELATION_LABELS[$type] ?? $type);
+        $label = self::RELATION_LABELS[$type] ?? $type;
+        $property = VCardEdit::replace($vCard, $property, 'X-ABRELATEDNAMES', (string) $property, $params);
+        $kept = null === $property->group ? null : ($this->labels($vCard)[strtolower($property->group)] ?? null);
+        $relation = null === $kept ? null : $this->relation((string) $kept);
+        if (null !== $kept && null !== $relation && !\in_array($relation, $types, true)) {
+            $kept->setValue($label);
+        }
+
+        $this->writeLabeled($vCard, $property, $label);
+    }
+
+    /**
+     * The RELATED type a label means, if any: a built-in or readable label of a relation
+     * (_$!<Mother>!$_ or "mother" is a parent), or the name of a RELATED type.
+     */
+    private function relation(string $label): ?string
+    {
+        $label = self::LABELS[$label] ?? $label;
+
+        return self::RELATIONS[$label] ?? (\in_array($label, Registry::RELATION_TYPES, true) ? $label : null);
     }
 
     /**

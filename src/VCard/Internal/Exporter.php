@@ -1296,8 +1296,31 @@ final class Exporter
      */
     private function verbatim(array $properties): void
     {
+        // The groups an X-ABLabel can still label: those of the properties written so far,
+        // and of the other verbatim properties.
+        $groups = [];
+        foreach ($this->vCard->children() as $child) {
+            if ($child instanceof Property && null !== $child->group && 'X-ABLABEL' !== $child->name) {
+                $groups[strtolower($child->group)] = true;
+            }
+        }
+
         foreach ($properties as $property) {
+            if ('x-ablabel' !== strtolower($property->name) && \is_string($property->parameters['group'] ?? null)) {
+                $groups[strtolower($property->parameters['group'])] = true;
+            }
+        }
+
+        foreach ($properties as $index => $property) {
             if ('version' === $property->name) {
+                continue;
+            }
+
+            $group = $property->parameters['group'] ?? null;
+            if ('x-ablabel' === strtolower($property->name) && \is_string($group) && !isset($groups[strtolower($group)])) {
+                // The property it labeled is gone, removed from the Card since it was read.
+                $this->issues->add('/vCardProps/'.$index, 'no property left in its group, left the X-ABLabel out');
+
                 continue;
             }
 

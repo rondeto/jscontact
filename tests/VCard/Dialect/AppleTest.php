@@ -172,6 +172,50 @@ final class AppleTest extends TestCase
         }
     }
 
+    public function testBuiltInLabelsAreWrittenBackAsApple(): void
+    {
+        $card = $this->read(implode("\r\n", [
+            'item1.X-ABRELATEDNAMES:Jane',
+            'item1.X-ABLabel:_$!<Spouse>!$_',
+            'item2.X-ABDATE:2010-06-12',
+            'item2.X-ABLabel:_$!<Anniversary>!$_',
+            '',
+        ]));
+
+        $lines = explode("\r\n", new VCardEncoder()->encode($card, Target::apple())->value);
+
+        self::assertContains('item1.X-ABLABEL:_$!<Spouse>!$_', $lines);
+        self::assertContains('item2.X-ABLABEL:_$!<Anniversary>!$_', $lines);
+    }
+
+    public function testAKeptLabelGivesWayToAChangedRelation(): void
+    {
+        $card = $this->read(implode("\r\n", [
+            'item1.X-ABRELATEDNAMES:John',
+            'item1.X-ABLabel:_$!<Spouse>!$_',
+            'item2.X-ABRELATEDNAMES:Ann',
+            'item2.X-ABLabel:_$!<Mother>!$_',
+            'item3.X-ABRELATEDNAMES:Max',
+            'item3.X-ABLabel:Godmother',
+            '',
+        ]));
+        $card->relatedTo['John']->relation = ['friend'];
+        $card->relatedTo['Max']->relation = ['friend'];
+
+        $vCard = new VCardEncoder()->encode($card, Target::apple())->value;
+        $lines = explode("\r\n", $vCard);
+
+        self::assertContains('item1.X-ABLABEL:_$!<Friend>!$_', $lines);
+        self::assertContains('item2.X-ABLABEL:_$!<Mother>!$_', $lines);
+        self::assertContains('item3.X-ABLABEL:Godmother', $lines);
+
+        $again = new VCardDecoder(dialects: [new Apple()])->decode($vCard)[0]->value ?? null;
+        self::assertNotNull($again);
+        self::assertSame(['friend'], $again->relatedTo['John']->relation);
+        self::assertSame(['parent'], $again->relatedTo['Ann']->relation);
+        self::assertSame(['friend'], $again->relatedTo['Max']->relation);
+    }
+
     private function read(string $properties): Card
     {
         $results = new VCardDecoder(dialects: [new Apple()])->decode("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\n".$properties."END:VCARD\r\n");
