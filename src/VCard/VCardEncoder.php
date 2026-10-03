@@ -61,12 +61,32 @@ final readonly class VCardEncoder
             throw new InvalidCardException($issues);
         }
 
-        $result = new Exporter($version)->export($card);
-        $issues = $result->issues;
-        foreach ($this->dialects as $dialect) {
-            array_push($issues, ...$dialect->write($result->value));
+        $exporter = new Exporter($version);
+        $result = $exporter->export($card);
+        if ([] === $this->dialects) {
+            return $result;
         }
 
-        return new Result($result->value, $issues);
+        $dialectIssues = [];
+        foreach ($this->dialects as $dialect) {
+            array_push($dialectIssues, ...$dialect->write($result->value));
+        }
+
+        // An issue about a property a dialect replaced no longer holds, such as "vCard 3.0
+        // does not define RELATED" once Apple wrote X-ABRELATEDNAMES instead.
+        $written = [];
+        foreach ($result->value->children() as $child) {
+            $written[spl_object_id($child)] = true;
+        }
+
+        $sources = $exporter->issueSources();
+        $issues = [];
+        foreach ($result->issues as $index => $issue) {
+            if (!isset($sources[$index]) || isset($written[spl_object_id($sources[$index])])) {
+                $issues[] = $issue;
+            }
+        }
+
+        return new Result($result->value, [...$issues, ...$dialectIssues]);
     }
 }

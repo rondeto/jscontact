@@ -7,11 +7,14 @@ namespace Rondeto\JSContact\Tests\VCard\Dialect;
 use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Conversion\Issue;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\Model\EmailAddress;
+use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\VCard\Dialect\Dialect;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
+use Rondeto\JSContact\VCard\VCardVersion;
 use Sabre\VObject\Component\VCard;
 use Sabre\VObject\Property;
 use Sabre\VObject\Reader;
@@ -51,6 +54,27 @@ final class DialectTest extends TestCase
         self::assertStringContainsString("X-NICK:Janie\r\n", $result->value);
         self::assertStringNotContainsString('NICKNAME', $result->value);
         self::assertSame(['/: NICKNAME parameters are left out'], array_map(strval(...), $result->issues));
+    }
+
+    public function testOnlyIssuesAboutHowAPropertyIsWrittenGoWithIt(): void
+    {
+        $card = new Card(
+            kind: Card::KIND_GROUP,
+            emails: ['e1' => new EmailAddress('a@example.com', contexts: ['example.com:car'])],
+            media: ['m1' => new Media('https://example.com/a.jpg', Media::KIND_PHOTO), 'm2' => new Media('https://example.com/a.mp4', 'example.com:video')],
+        );
+
+        $issues = static fn (VCardEncoder $encoder): array => array_map(strval(...), $encoder->encode($card, VCardVersion::V30)->issues);
+        self::assertSame([
+            '/kind: vCard 3.0 does not define KIND, wrote it anyway',
+            '/emails/e1/contexts/example.com:car: vCard has no TYPE for this context, left it out',
+            '/media/m2: vCard has no media of kind "example.com:video", wrote it as JSPROP',
+        ], $issues(new VCardEncoder()));
+
+        // A dialect replacing every property: the context is still left out.
+        self::assertSame([
+            '/emails/e1/contexts/example.com:car: vCard has no TYPE for this context, left it out',
+        ], $issues(new VCardEncoder(dialects: [new ReplacingDialect()])));
     }
 }
 
@@ -94,5 +118,28 @@ final class NicknameDialect implements Dialect
         }
 
         return $issues;
+    }
+}
+
+/**
+ * A vendor that writes every property again, the same.
+ */
+final class ReplacingDialect implements Dialect
+{
+    public function read(VCard $vCard): array
+    {
+        return [];
+    }
+
+    public function write(VCard $vCard): array
+    {
+        foreach ($vCard->children() as $property) {
+            if ($property instanceof Property && 'VERSION' !== $property->name) {
+                $vCard->remove($property);
+                $vCard->add(clone $property);
+            }
+        }
+
+        return [];
     }
 }

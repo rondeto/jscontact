@@ -28,7 +28,8 @@ interface Dialect
     public function read(VCard $vCard): array;
 
     /**
-     * Rewrites RFC properties of a vCard as the vendor properties this vendor reads.
+     * Rewrites RFC properties of a vCard as the vendor properties this vendor reads. The
+     * issues of the conversion about a property it replaces are dropped.
      *
      * @return list<Issue> What could not be rewritten faithfully, at the root of the Card
      */
