@@ -27,7 +27,8 @@ use Sabre\VObject\Component\VCard;
  * With strict: true, any issue makes the conversion fail instead.
  *
  * Dialects first rewrite the vendor properties they know as the RFC properties they mean,
- * in the order given.
+ * in the order given. As the address book a vCard comes from is seldom known, pass
+ * Dialects::all() to read them all.
  */
 final readonly class VCardDecoder
 {

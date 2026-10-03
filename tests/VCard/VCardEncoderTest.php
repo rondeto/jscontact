@@ -29,6 +29,7 @@ use Rondeto\JSContact\Model\Timestamp;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
 use Rondeto\JSContact\VCard\VCardVersion;
@@ -57,7 +58,7 @@ final class VCardEncoderTest extends TestCase
     {
         $card = new Card(kind: Card::KIND_GROUP, phones: ['p1' => new Phone('+33612345678', contexts: ['work'], pref: 2)]);
 
-        $result = new VCardEncoder()->encode($card, VCardVersion::V30);
+        $result = new VCardEncoder()->encode($card, new Target(VCardVersion::V30));
 
         self::assertStringContainsString('TEL;PROP-ID=p1;TYPE=work,pref:+33612345678', $result->value);
         self::assertSame([
@@ -129,7 +130,7 @@ final class VCardEncoderTest extends TestCase
         self::assertStringContainsString('JSPROP;JSPTR=anniversaries/a3/place:{"full":"Rome"}', $v40->value);
         self::assertEquals($card, new VCardDecoder()->decode($v40->value)[0]->value ?? null);
 
-        $v30 = new VCardEncoder()->encode(new Card(anniversaries: ['a1' => $card->anniversaries['a1'], 'a2' => $card->anniversaries['a2']]), VCardVersion::V30);
+        $v30 = new VCardEncoder()->encode(new Card(anniversaries: ['a1' => $card->anniversaries['a1'], 'a2' => $card->anniversaries['a2']]), new Target(VCardVersion::V30));
         self::assertStringContainsString('DEATHDATE;PROP-ID=a2:2019-10-15T23:10:00Z', $v30->value);
         self::assertStringContainsString('JSPROP;JSPTR=anniversaries/a1:', $v30->value);
     }
@@ -153,7 +154,7 @@ final class VCardEncoderTest extends TestCase
         self::assertEquals($vendor, new VCardDecoder()->decode($result->value)[0]->value ?? null);
 
         $card = new Card(speakToAs: new SpeakToAs('neuter', ['p1' => new Pronouns('they/them', ['private'], 1)]));
-        $result = new VCardEncoder()->encode($card, VCardVersion::V30);
+        $result = new VCardEncoder()->encode($card, new Target(VCardVersion::V30));
 
         self::assertStringContainsString("GRAMGENDER:neuter\r\nPRONOUNS;PROP-ID=p1;TYPE=home,pref:they/them\r\n", $result->value);
         self::assertSame([
@@ -182,7 +183,7 @@ final class VCardEncoderTest extends TestCase
         ], array_map(strval(...), $v40->issues));
         self::assertEquals($card, new VCardDecoder()->decode($v40->value)[0]->value ?? null);
 
-        $v30 = new VCardEncoder()->encode(new Card(media: ['m1' => $card->media['m1'], 'm2' => $card->media['m2']]), VCardVersion::V30);
+        $v30 = new VCardEncoder()->encode(new Card(media: ['m1' => $card->media['m1'], 'm2' => $card->media['m2']]), new Target(VCardVersion::V30));
         self::assertStringContainsString("PHOTO;ENCODING=b;PROP-ID=m1;TYPE=JPEG:/9j/4AAQ\r\n", $v30->value);
         self::assertStringContainsString("LOGO;VALUE=uri;PROP-ID=m2;TYPE=PNG:https://example.com/a,b.png\r\n", $v30->value);
     }
@@ -222,7 +223,7 @@ final class VCardEncoderTest extends TestCase
         self::assertStringContainsString("GEO;PROP-ID=a1;TYPE=work:geo:48.85,2.35\r\nTZ:Etc/GMT+5\r\n", $v40);
         self::assertEquals($alone, new VCardDecoder()->decode($v40)[0]->value ?? null);
 
-        $v30 = new VCardEncoder()->encode($alone, VCardVersion::V30)->value;
+        $v30 = new VCardEncoder()->encode($alone, new Target(VCardVersion::V30))->value;
         self::assertStringContainsString("GEO;PROP-ID=a1;TYPE=work:48.85;2.35\r\nTZ:-05:00\r\n", $v30);
         self::assertEquals($alone, new VCardDecoder()->decode($v30)[0]->value ?? null);
 

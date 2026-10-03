@@ -12,8 +12,8 @@ use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\VCard\Dialect\Android;
-use Rondeto\JSContact\VCard\Dialect\Apple;
-use Rondeto\JSContact\VCard\Dialect\LegacyMessaging;
+use Rondeto\JSContact\VCard\Dialect\Dialects;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
 use Rondeto\JSContact\VCard\VCardVersion;
@@ -61,7 +61,7 @@ final class AndroidTest extends TestCase
             relatedTo: ['Jane' => new Relation(['spouse']), 'Ann' => new Relation(['co-worker']), 'Bob' => new Relation([])],
         );
 
-        $result = new VCardEncoder(dialects: [new Android()])->encode($card, VCardVersion::V30);
+        $result = new VCardEncoder()->encode($card, new Target(VCardVersion::V30, [new Android()]));
 
         self::assertSame([], array_map(strval(...), $result->issues));
         foreach ([
@@ -83,30 +83,28 @@ final class AndroidTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, list<\Rondeto\JSContact\VCard\Dialect\Dialect>}>
+     * @return iterable<string, array{string, Target}>
      */
     public static function exports(): iterable
     {
         foreach (['android.vcf', 'android-full.vcf', 'android-quotedprintable.vcf'] as $file) {
-            yield $file => [$file, [new Android(), new LegacyMessaging()]];
+            yield $file => [$file, Target::android()];
         }
 
         foreach (['apple.vcf', 'google-full.vcf', 'ios-full.vcf'] as $file) {
-            yield $file => [$file, [new Apple(), new LegacyMessaging()]];
+            yield $file => [$file, Target::apple()];
         }
     }
 
     /**
-     * Reading with every dialect, writing with those of the address book the vCard is for.
-     *
-     * @param list<\Rondeto\JSContact\VCard\Dialect\Dialect> $dialects
+     * Reading with every dialect, writing for the address book the vCard comes from.
      */
     #[DataProvider('exports')]
-    public function testExportsSurviveARoundTripThroughTheirDialects(string $file, array $dialects): void
+    public function testExportsSurviveARoundTripThroughTheirDialects(string $file, Target $target): void
     {
-        $decoder = new VCardDecoder(dialects: [new Apple(), new Android(), new LegacyMessaging()]);
+        $decoder = new VCardDecoder(dialects: Dialects::all());
         foreach ($decoder->decode((string) file_get_contents(__DIR__.'/../../Fixtures/CozyVcard/'.$file)) as $result) {
-            $vCard = new VCardEncoder(validate: false, dialects: $dialects)->encode($result->value, VCardVersion::V30)->value;
+            $vCard = new VCardEncoder(validate: false)->encode($result->value, $target)->value;
 
             self::assertEquals($result->value, $decoder->decode($vCard)[0]->value ?? null);
         }

@@ -13,6 +13,7 @@ use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\PartialDate;
 use Rondeto\JSContact\Model\Relation;
 use Rondeto\JSContact\VCard\Dialect\Apple;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
 use Rondeto\JSContact\VCard\VCardVersion;
@@ -75,7 +76,7 @@ final class AppleTest extends TestCase
             relatedTo: ['Jane' => new Relation(['spouse']), 'Bob' => new Relation(['agent']), 'Ann' => new Relation(['co-worker'])],
         );
 
-        $result = new VCardEncoder(dialects: [new Apple()])->encode($card);
+        $result = new VCardEncoder()->encode($card, new Target(dialects: [new Apple()]));
         $lines = explode("\r\n", $result->value);
 
         self::assertSame([], array_map(strval(...), $result->issues));
@@ -113,15 +114,15 @@ final class AppleTest extends TestCase
             '/kind: vCard 3.0 does not define KIND, wrote it anyway',
             '/relatedTo/Jane: vCard 3.0 does not define RELATED, wrote it anyway',
             '/members: vCard 3.0 does not define MEMBER, wrote it anyway',
-        ], array_map(strval(...), new VCardEncoder()->encode($card, VCardVersion::V30)->issues));
+        ], array_map(strval(...), new VCardEncoder()->encode($card, new Target(VCardVersion::V30))->issues));
 
-        self::assertSame([], array_map(strval(...), new VCardEncoder(dialects: [new Apple()])->encode($card, VCardVersion::V30)->issues));
+        self::assertSame([], array_map(strval(...), new VCardEncoder()->encode($card, new Target(VCardVersion::V30, [new Apple()]))->issues));
 
         // A KIND Apple has no equivalent for stays, and so does the issue.
         self::assertSame([
             '/kind: vCard 3.0 does not define KIND, wrote it anyway',
             '/kind: Apple has no kind "location", kept KIND',
-        ], array_map(strval(...), new VCardEncoder(dialects: [new Apple()])->encode(new Card(kind: Card::KIND_LOCATION), VCardVersion::V30)->issues));
+        ], array_map(strval(...), new VCardEncoder()->encode(new Card(kind: Card::KIND_LOCATION), new Target(VCardVersion::V30, [new Apple()]))->issues));
     }
 
     public function testDatesWithoutYearAreWrittenInYear1604InVersion3(): void
@@ -131,9 +132,9 @@ final class AppleTest extends TestCase
             'w' => new Anniversary(Anniversary::KIND_WEDDING, new PartialDate(null, 6, 12)),
         ]);
 
-        self::assertStringContainsString('JSPROP', new VCardEncoder()->encode($card, VCardVersion::V30)->value);
+        self::assertStringContainsString('JSPROP', new VCardEncoder()->encode($card, new Target(VCardVersion::V30))->value);
 
-        $result = new VCardEncoder(dialects: [new Apple()])->encode($card, VCardVersion::V30);
+        $result = new VCardEncoder()->encode($card, new Target(VCardVersion::V30, [new Apple()]));
 
         self::assertSame([], array_map(strval(...), $result->issues));
         self::assertStringNotContainsString('JSPROP', $result->value);
@@ -145,7 +146,7 @@ final class AppleTest extends TestCase
 
         // With a place, the JSPROP is still needed.
         $withPlace = new Card(anniversaries: ['b' => new Anniversary(Anniversary::KIND_BIRTH, new PartialDate(null, 4, 12), new Address(full: 'Paris'))]);
-        $result = new VCardEncoder(dialects: [new Apple()])->encode($withPlace, VCardVersion::V30);
+        $result = new VCardEncoder()->encode($withPlace, new Target(VCardVersion::V30, [new Apple()]));
         self::assertStringContainsString('JSPROP', $result->value);
         self::assertSame(['/anniversaries/b: vCard 3.0 has no partial dates, wrote the anniversary as JSPROP'], array_map(strval(...), $result->issues));
     }
@@ -165,7 +166,7 @@ final class AppleTest extends TestCase
     {
         $decoder = new VCardDecoder(dialects: [new Apple()]);
         foreach ($decoder->decode((string) file_get_contents(__DIR__.'/../../Fixtures/CozyVcard/'.$file)) as $result) {
-            $vCard = new VCardEncoder(validate: false, dialects: [new Apple()])->encode($result->value, VCardVersion::V30)->value;
+            $vCard = new VCardEncoder(validate: false)->encode($result->value, new Target(VCardVersion::V30, [new Apple()]))->value;
 
             self::assertEquals($result->value, $decoder->decode($vCard)[0]->value ?? null);
         }

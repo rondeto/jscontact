@@ -12,6 +12,7 @@ use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\VCard\Dialect\Dialect;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
 use Rondeto\JSContact\VCard\VCardVersion;
@@ -49,7 +50,7 @@ final class DialectTest extends TestCase
 
     public function testADialectRewritesTheVCardOnceWritten(): void
     {
-        $result = new VCardEncoder(dialects: [new NicknameDialect()])->encode(new Card(nicknames: ['n1' => new Nickname('Janie')]));
+        $result = new VCardEncoder()->encode(new Card(nicknames: ['n1' => new Nickname('Janie')]), new Target(dialects: [new NicknameDialect()]));
 
         self::assertStringContainsString("X-NICK:Janie\r\n", $result->value);
         self::assertStringNotContainsString('NICKNAME', $result->value);
@@ -64,17 +65,17 @@ final class DialectTest extends TestCase
             media: ['m1' => new Media('https://example.com/a.jpg', Media::KIND_PHOTO), 'm2' => new Media('https://example.com/a.mp4', 'example.com:video')],
         );
 
-        $issues = static fn (VCardEncoder $encoder): array => array_map(strval(...), $encoder->encode($card, VCardVersion::V30)->issues);
+        $issues = static fn (Target $target): array => array_map(strval(...), new VCardEncoder()->encode($card, $target)->issues);
         self::assertSame([
             '/kind: vCard 3.0 does not define KIND, wrote it anyway',
             '/emails/e1/contexts/example.com:car: vCard has no TYPE for this context, left it out',
             '/media/m2: vCard has no media of kind "example.com:video", wrote it as JSPROP',
-        ], $issues(new VCardEncoder()));
+        ], $issues(new Target(VCardVersion::V30)));
 
         // A dialect replacing every property: the context is still left out.
         self::assertSame([
             '/emails/e1/contexts/example.com:car: vCard has no TYPE for this context, left it out',
-        ], $issues(new VCardEncoder(dialects: [new ReplacingDialect()])));
+        ], $issues(new Target(VCardVersion::V30, [new ReplacingDialect()])));
     }
 }
 

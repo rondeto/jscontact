@@ -8,7 +8,6 @@ use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\InvalidCardException;
-use Rondeto\JSContact\VCard\Dialect\Dialect;
 use Rondeto\JSContact\VCard\Internal\Exporter;
 use Sabre\VObject\Component\VCard;
 
@@ -22,19 +21,14 @@ use Sabre\VObject\Component\VCard;
  * Writing is strict by default: a Card that breaks the JSContact specification is refused.
  * Pass validate: false to write it anyway.
  *
- * Dialects then rewrite RFC properties as the vendor properties they stand for, in the
- * reverse order of the list: the one VCardDecoder applies first applies last, so that the
- * same list works both ways.
+ * The Target gives the vCard version, and the dialects that then rewrite RFC properties as
+ * the vendor properties they stand for.
  */
 final readonly class VCardEncoder
 {
-    /**
-     * @param list<Dialect> $dialects
-     */
     public function __construct(
         private bool $validate = true,
         private CardValidator $validator = new CardValidator(),
-        private array $dialects = [],
     ) {
     }
 
@@ -43,9 +37,9 @@ final readonly class VCardEncoder
      *
      * @throws InvalidCardException when validation is on and the Card is invalid
      */
-    public function encode(Card $card, VCardVersion $version = VCardVersion::V40): Result
+    public function encode(Card $card, Target $target = new Target()): Result
     {
-        $result = $this->convert($card, $version);
+        $result = $this->convert($card, $target);
 
         return new Result($result->value->serialize(), $result->issues);
     }
@@ -55,21 +49,21 @@ final readonly class VCardEncoder
      *
      * @throws InvalidCardException when validation is on and the Card is invalid
      */
-    public function convert(Card $card, VCardVersion $version = VCardVersion::V40): Result
+    public function convert(Card $card, Target $target = new Target()): Result
     {
         $issues = $this->validate ? $this->validator->validate($card) : [];
         if ([] !== $issues) {
             throw new InvalidCardException($issues);
         }
 
-        $exporter = new Exporter($version);
+        $exporter = new Exporter($target->version);
         $result = $exporter->export($card);
-        if ([] === $this->dialects) {
+        if ([] === $target->dialects) {
             return $result;
         }
 
         $dialectIssues = [];
-        foreach (array_reverse($this->dialects) as $dialect) {
+        foreach ($target->dialects as $dialect) {
             array_push($dialectIssues, ...$dialect->write($result->value));
         }
 
