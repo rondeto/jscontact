@@ -172,6 +172,22 @@ final class AppleTest extends TestCase
         }
     }
 
+    public function testBuiltInLabelsAreWrittenBackAsApple(): void
+    {
+        $card = $this->read(implode("\r\n", [
+            'item1.X-ABRELATEDNAMES:Jane',
+            'item1.X-ABLabel:_$!<Spouse>!$_',
+            'item2.X-ABDATE:2010-06-12',
+            'item2.X-ABLabel:_$!<Anniversary>!$_',
+            '',
+        ]));
+
+        $lines = explode("\r\n", new VCardEncoder()->encode($card, Target::apple())->value);
+
+        self::assertContains('item1.X-ABLABEL:_$!<Spouse>!$_', $lines);
+        self::assertContains('item2.X-ABLABEL:_$!<Anniversary>!$_', $lines);
+    }
+
     private function read(string $properties): Card
     {
         $results = new VCardDecoder(dialects: [new Apple()])->decode("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Test\r\n".$properties."END:VCARD\r\n");
