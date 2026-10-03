@@ -198,32 +198,14 @@ final readonly class Apple implements Dialect
      */
     private function writeDatesWithoutYear(VCard $vCard, Property $jsProp): void
     {
-        $pointer = VCardEdit::parts($jsProp, 'JSPTR')[0] ?? '';
-        $value = json_decode((string) $jsProp, true);
-        if ('anniversaries' === $pointer && \is_array($value)) {
-            $anniversaries = $value;
-        } elseif (1 === preg_match('~^anniversaries/([^/]+)$~', $pointer, $matches)) {
-            $anniversaries = [strtr($matches[1], ['~1' => '/', '~0' => '~']) => $value];
-        } else {
+        $dates = VCardEdit::datesWithoutYear($jsProp);
+        if (null === $dates) {
             return;
         }
 
-        $dates = [];
-        foreach ($anniversaries as $key => $anniversary) {
-            $date = \is_array($anniversary) ? ($anniversary['date'] ?? null) : null;
-            $isDateWithoutYear = \is_array($date) && \is_int($date['month'] ?? null) && \is_int($date['day'] ?? null)
-                && [] === array_diff(array_keys($date), ['@type', 'month', 'day']);
-            $kind = \is_array($anniversary) ? ($anniversary['kind'] ?? null) : null;
-            // Anything more, such as a place, needs the JSPROP.
-            if (!$isDateWithoutYear || !\in_array($kind, ['birth', 'wedding'], true) || [] !== array_diff(array_keys($anniversary), ['@type', 'kind', 'date'])) {
-                return;
-            }
-
-            $dates[(string) $key] = [$kind, \sprintf('%s-%02d-%02d', self::NO_YEAR, $date['month'], $date['day'])];
-        }
-
         $vCard->remove($jsProp);
-        foreach ($dates as $key => [$kind, $date]) {
+        foreach ($dates as $key => [$kind, $month, $day]) {
+            $date = \sprintf('%s-%02d-%02d', self::NO_YEAR, $month, $day);
             $params = ['PROP-ID' => $key, 'X-APPLE-OMIT-YEAR' => self::NO_YEAR];
             if ('birth' === $kind) {
                 $vCard->add('BDAY', $date, $params);
