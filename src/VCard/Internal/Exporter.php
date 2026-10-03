@@ -489,24 +489,27 @@ final class Exporter
      */
     private function unwrittenLocalizations(array $unwritten, int $count): void
     {
+        $issues = [];
         foreach (array_keys($unwritten) as $language) {
-            $this->issues->add('/localizations/'.$this->escape($language), 'vCard cannot hold this localization, wrote it as JSPROP');
+            $issues[$language] = $this->issues->add('/localizations/'.$this->escape($language), 'vCard cannot hold this localization, wrote it as JSPROP');
         }
 
         if ([] !== $unwritten && \count($unwritten) === $count) {
-            $this->jsProp('localizations', (object) array_map(static fn (PatchObject $patch): object => (object) $patch->patches, $unwritten));
+            $this->jsProp('localizations', (object) array_map(static fn (PatchObject $patch): object => (object) $patch->patches, $unwritten), ...array_values($issues));
 
             return;
         }
 
         foreach ($unwritten as $language => $patch) {
-            $this->jsProp('localizations/'.$this->escape($language), (object) $patch->patches);
+            $this->jsProp('localizations/'.$this->escape($language), (object) $patch->patches, $issues[$language]);
         }
     }
 
     /**
      * The property each issue of the last export is about, by index of the issue: an issue
-     * no longer holds once a dialect replaced its property.
+     * no longer holds once a dialect replaced its property. Only the issues about how a
+     * property is written are linked ("vCard 3.0 does not define X", "wrote it as JSPROP"),
+     * not those about a value left out, which still holds whatever a dialect writes.
      *
      * @return array<int, Property>
      */
@@ -833,6 +836,7 @@ final class Exporter
     private function resources(Card $card): void
     {
         $unwritten = [];
+        $issues = [];
         foreach ($card->media as $key => $media) {
             $name = match ($media->kind) {
                 Media::KIND_PHOTO => 'PHOTO',
@@ -841,7 +845,7 @@ final class Exporter
                 default => null,
             };
             if (null === $name) {
-                $this->issues->add('/media/'.$key, \sprintf('vCard has no media of kind "%s", wrote it as JSPROP', $media->kind));
+                $issues[$key] = $this->issues->add('/media/'.$key, \sprintf('vCard has no media of kind "%s", wrote it as JSPROP', $media->kind));
                 $unwritten[$key] = $media;
                 continue;
             }
@@ -849,17 +853,18 @@ final class Exporter
             $this->resource($name, (string) $key, $media->uri, $media->mediaType, $media->contexts, $media->pref, $media->label, $media->vCardParams, '/media/'.$key);
         }
 
-        $this->unwrittenEntries('media', new Card(media: $unwritten), \count($card->media));
+        $this->unwrittenEntries('media', new Card(media: $unwritten), \count($card->media), $issues);
 
         foreach ($card->cryptoKeys as $key => $cryptoKey) {
             $this->resource('KEY', (string) $key, $cryptoKey->uri, $cryptoKey->mediaType, $cryptoKey->contexts, $cryptoKey->pref, $cryptoKey->label, $cryptoKey->vCardParams, '/cryptoKeys/'.$key);
             if (null !== $cryptoKey->kind) {
-                $this->issues->add('/cryptoKeys/'.$key.'/kind', 'vCard has no kind of key, wrote it as JSPROP');
-                $this->jsProp('cryptoKeys/'.$this->escape((string) $key).'/kind', $cryptoKey->kind);
+                $issue = $this->issues->add('/cryptoKeys/'.$key.'/kind', 'vCard has no kind of key, wrote it as JSPROP');
+                $this->jsProp('cryptoKeys/'.$this->escape((string) $key).'/kind', $cryptoKey->kind, $issue);
             }
         }
 
         $unwritten = [];
+        $issues = [];
         foreach ($card->directories as $key => $directory) {
             $name = match ($directory->kind) {
                 Directory::KIND_ENTRY => 'SOURCE',
@@ -867,7 +872,7 @@ final class Exporter
                 default => null,
             };
             if (null === $name) {
-                $this->issues->add('/directories/'.$key, \sprintf('vCard has no directory of kind "%s", wrote it as JSPROP', $directory->kind));
+                $issues[$key] = $this->issues->add('/directories/'.$key, \sprintf('vCard has no directory of kind "%s", wrote it as JSPROP', $directory->kind));
                 $unwritten[$key] = $directory;
                 continue;
             }
@@ -876,9 +881,10 @@ final class Exporter
             $this->resource($name, (string) $key, $directory->uri, $directory->mediaType, $directory->contexts, $directory->pref, $directory->label, $directory->vCardParams, '/directories/'.$key, $params);
         }
 
-        $this->unwrittenEntries('directories', new Card(directories: $unwritten), \count($card->directories));
+        $this->unwrittenEntries('directories', new Card(directories: $unwritten), \count($card->directories), $issues);
 
         $unwritten = [];
+        $issues = [];
         foreach ($card->calendars as $key => $calendar) {
             $name = match ($calendar->kind) {
                 Calendar::KIND_CALENDAR => 'CALURI',
@@ -886,7 +892,7 @@ final class Exporter
                 default => null,
             };
             if (null === $name) {
-                $this->issues->add('/calendars/'.$key, \sprintf('vCard has no calendar of kind "%s", wrote it as JSPROP', $calendar->kind));
+                $issues[$key] = $this->issues->add('/calendars/'.$key, \sprintf('vCard has no calendar of kind "%s", wrote it as JSPROP', $calendar->kind));
                 $unwritten[$key] = $calendar;
                 continue;
             }
@@ -894,7 +900,7 @@ final class Exporter
             $this->resource($name, (string) $key, $calendar->uri, $calendar->mediaType, $calendar->contexts, $calendar->pref, $calendar->label, $calendar->vCardParams, '/calendars/'.$key);
         }
 
-        $this->unwrittenEntries('calendars', new Card(calendars: $unwritten), \count($card->calendars));
+        $this->unwrittenEntries('calendars', new Card(calendars: $unwritten), \count($card->calendars), $issues);
 
         foreach ($card->schedulingAddresses as $key => $address) {
             $this->resource('CALADRURI', (string) $key, $address->uri, null, $address->contexts, $address->pref, $address->label, $address->vCardParams, '/schedulingAddresses/'.$key);
@@ -919,8 +925,8 @@ final class Exporter
                 if (1 === preg_match('/^[a-z0-9-]+$/i', $type)) {
                     $types[] = $type;
                 } else {
-                    $this->issues->add($path.'/relation/'.$this->escape($type), 'vCard has no TYPE for this relation, wrote it as JSPROP');
-                    $this->jsProp('relatedTo/'.$this->escape($key).'/relation/'.$this->escape($type), true);
+                    $issue = $this->issues->add($path.'/relation/'.$this->escape($type), 'vCard has no TYPE for this relation, wrote it as JSPROP');
+                    $this->jsProp('relatedTo/'.$this->escape($key).'/relation/'.$this->escape($type), true, $issue);
                 }
             }
 
@@ -940,6 +946,7 @@ final class Exporter
         }
 
         $unwritten = [];
+        $issues = [];
         foreach ($card->personalInfo as $key => $info) {
             $name = match ($info->kind) {
                 PersonalInfo::KIND_EXPERTISE => 'EXPERTISE',
@@ -948,7 +955,7 @@ final class Exporter
                 default => null,
             };
             if (null === $name) {
-                $this->issues->add('/personalInfo/'.$key, \sprintf('vCard has no personal information of kind "%s", wrote it as JSPROP', $info->kind));
+                $issues[$key] = $this->issues->add('/personalInfo/'.$key, \sprintf('vCard has no personal information of kind "%s", wrote it as JSPROP', $info->kind));
                 $unwritten[$key] = $info;
                 continue;
             }
@@ -965,7 +972,7 @@ final class Exporter
             $this->entry($name, $info->value, (string) $key, [], null, $info->label, $info->vCardParams, '/personalInfo/'.$key, $params);
         }
 
-        $this->unwrittenEntries('personalInfo', new Card(personalInfo: $unwritten), \count($card->personalInfo));
+        $this->unwrittenEntries('personalInfo', new Card(personalInfo: $unwritten), \count($card->personalInfo), $issues);
     }
 
     /**
@@ -1008,9 +1015,10 @@ final class Exporter
      * Entries vCard cannot hold, written as JSPROP. A pointer needs its parent to exist: the
      * whole map when no entry of it was written.
      *
-     * @param Card $unwritten A Card with only the entries not written, in the map
+     * @param Card                  $unwritten A Card with only the entries not written, in the map
+     * @param array<array-key, int> $issues    The issue of each entry not written, by key
      */
-    private function unwrittenEntries(string $map, Card $unwritten, int $count): void
+    private function unwrittenEntries(string $map, Card $unwritten, int $count, array $issues): void
     {
         $entries = $this->json($unwritten, $map);
         if (!$entries instanceof \stdClass) {
@@ -1018,13 +1026,13 @@ final class Exporter
         }
 
         if (\count(get_object_vars($entries)) === $count) {
-            $this->jsProp($map, $entries);
+            $this->jsProp($map, $entries, ...array_values($issues));
 
             return;
         }
 
         foreach (get_object_vars($entries) as $key => $entry) {
-            $this->jsProp($map.'/'.$this->escape((string) $key), $entry);
+            $this->jsProp($map.'/'.$this->escape((string) $key), $entry, ...(isset($issues[$key]) ? [$issues[$key]] : []));
         }
     }
 
@@ -1044,15 +1052,15 @@ final class Exporter
             $group = $speakToAs->vCardParams['group'] ?? null;
             $this->add('GRAMGENDER', $gender, $this->parameters($speakToAs->vCardParams), \is_string($group) ? $group : null, '/speakToAs/grammaticalGender');
         } elseif (null !== $gender) {
-            $this->issues->add('/speakToAs/grammaticalGender', \sprintf('vCard has no grammatical gender "%s", wrote it as JSPROP', $gender));
+            $issue = $this->issues->add('/speakToAs/grammaticalGender', \sprintf('vCard has no grammatical gender "%s", wrote it as JSPROP', $gender));
             // A JSPROP needs its parent to exist: the whole object when there are no pronouns.
             if ([] === $speakToAs->pronouns) {
-                $this->jsProp('speakToAs', $this->json(new Card(speakToAs: $speakToAs), 'speakToAs'));
+                $this->jsProp('speakToAs', $this->json(new Card(speakToAs: $speakToAs), 'speakToAs'), $issue);
 
                 return;
             }
 
-            $this->jsProp('speakToAs/grammaticalGender', $gender);
+            $this->jsProp('speakToAs/grammaticalGender', $gender, $issue);
         } elseif ([] !== $speakToAs->vCardParams) {
             $this->issues->add('/speakToAs/vCardParams', 'no GRAMGENDER property to write them on, left them out');
         }
@@ -1120,21 +1128,17 @@ final class Exporter
                 $group = $place->vCardParams['group'] ?? null;
                 $this->add($placeName, $placeValue, $placeParams, \is_string($group) ? $group : null, $path.'/place');
             } else {
-                $this->issues->add($path.'/place', 'vCard cannot hold this place, wrote it as JSPROP');
-                $this->jsProp('anniversaries/'.$this->escape($key).'/place', $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key, 'place'));
+                $issue = $this->issues->add($path.'/place', 'vCard cannot hold this place, wrote it as JSPROP');
+                $this->jsProp('anniversaries/'.$this->escape($key).'/place', $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key, 'place'), $issue);
             }
         }
 
         // A JSPROP needs its parent to exist: the whole map when no anniversary was written.
         if ([] !== $unwritten && \count($unwritten) === \count($card->anniversaries)) {
-            $jsProp = $this->jsProp('anniversaries', $this->json(new Card(anniversaries: $unwritten), 'anniversaries'));
-            foreach ($unwrittenIssues as $issue) {
-                $this->issueSources[$issue] = $jsProp;
-            }
+            $this->jsProp('anniversaries', $this->json(new Card(anniversaries: $unwritten), 'anniversaries'), ...array_values($unwrittenIssues));
         } else {
             foreach ($unwritten as $key => $anniversary) {
-                $jsProp = $this->jsProp('anniversaries/'.$this->escape($key), $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key));
-                $this->issueSources[$unwrittenIssues[$key]] = $jsProp;
+                $this->jsProp('anniversaries/'.$this->escape($key), $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key), $unwrittenIssues[$key]);
             }
         }
     }
@@ -1397,9 +1401,18 @@ final class Exporter
         }
     }
 
-    private function jsProp(string $pointer, mixed $value): Property
+    /**
+     * @param int ...$issues The issues saying the values were written as this JSPROP: they
+     *                       no longer hold once a dialect replaced it, see issueSources()
+     */
+    private function jsProp(string $pointer, mixed $value, int ...$issues): Property
     {
-        return $this->add('JSPROP', json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR), ['JSPTR' => $pointer]);
+        $property = $this->add('JSPROP', json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR), ['JSPTR' => $pointer]);
+        foreach ($issues as $issue) {
+            $this->issueSources[$issue] = $property;
+        }
+
+        return $property;
     }
 
     /**
