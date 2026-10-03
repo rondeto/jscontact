@@ -14,6 +14,7 @@ use Rondeto\JSContact\Model\CryptoKey;
 use Rondeto\JSContact\Model\Directory;
 use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\LanguagePref;
+use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
 use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Organization;
@@ -28,6 +29,7 @@ use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
 use Rondeto\JSContact\Validation\InvalidCardException;
 use Rondeto\JSContact\VCard\VCardDecoder;
+use Rondeto\JSContact\VCard\VCardEncoder;
 use Sabre\VObject\Component\VCard;
 use Sabre\VObject\Reader;
 
@@ -313,6 +315,26 @@ final class VCardDecoderTest extends TestCase
         $result = $this->decode("PRODID;VALUE=text;VALUE=TEXT:App\r\n");
 
         self::assertSame('App', $result->value->prodId);
+        self::assertSame(['/: line 3 repeats the VALUE parameter, kept the first one'], array_map(strval(...), $result->issues));
+    }
+
+    public function testListedValueParametersAreReported(): void
+    {
+        $results = new VCardDecoder()->decode("BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Jane Doe\r\nURL;TYPE=work;VALUE=uri,text:https://jane.example\r\nEND:VCARD\r\n");
+        self::assertCount(1, $results);
+        $card = $results[0]->value;
+
+        self::assertSame('Jane Doe', $card->name?->full);
+        self::assertEquals(new Link('https://jane.example', contexts: ['work']), $card->links['LINK-1'] ?? null);
+        self::assertSame(['/: line 4 lists several values in the VALUE parameter, kept the first one'], array_map(strval(...), $results[0]->issues));
+        self::assertStringContainsString("\r\nURL;PROP-ID=LINK-1;TYPE=work:https://jane.example\r\n", new VCardEncoder()->encode($card)->value);
+    }
+
+    public function testRepeatedAndListedValueParametersAreReported(): void
+    {
+        $result = $this->decode("URL;VALUE=uri,text;VALUE=text:https://jane.example\r\n");
+
+        self::assertSame('https://jane.example', $result->value->links['LINK-1']->uri ?? null);
         self::assertSame(['/: line 3 repeats the VALUE parameter, kept the first one'], array_map(strval(...), $result->issues));
     }
 

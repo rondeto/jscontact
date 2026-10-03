@@ -12,9 +12,10 @@ use Sabre\VObject\Reader;
  * Reads vCard text leniently, one card at a time, with sabre/vobject.
  *
  * Before handing each card to sabre, it reports the lines sabre would silently drop,
- * removes repeated VALUE parameters (sabre/vobject 5.0 crashes on them), and keeps the
- * raw value of each property: sabre cannot tell escaped commas in N and ADR from list
- * separators, and loses the escapes of unknown properties, which jCard keeps as is.
+ * keeps one value of a repeated or listed VALUE parameter (sabre/vobject 5.0 crashes on
+ * them), and keeps the raw value of each property: sabre cannot tell escaped commas in N
+ * and ADR from list separators, and loses the escapes of unknown properties, which jCard
+ * keeps as is.
  *
  * @internal
  */
@@ -72,13 +73,24 @@ final class Parser
             $parts = explode(';', $head);
             $name = strtoupper((string) preg_replace('/^.*\./', '', $parts[0]));
 
-            // sabre/vobject workaround: a repeated VALUE parameter makes sabre 5.0 throw a
-            // TypeError (Document::getClassNameForPropertyValue() gets an array).
-            $values = preg_grep('/^VALUE=/i', \array_slice($parts, 1)) ?: [];
-            if (\count($values) > 1) {
-                $issues[] = \sprintf('line %d repeats the VALUE parameter, kept the first one', $number);
-                $first = array_key_first($values);
-                $head = implode(';', array_filter($parts, static fn (string $part, int $index): bool => 0 === $index || $index === $first || !\in_array($index, array_keys($values), true), \ARRAY_FILTER_USE_BOTH));
+            // sabre/vobject workaround: a VALUE parameter with several values, repeated
+            // (VALUE=text;VALUE=TEXT) or listed (VALUE=uri,text), makes sabre 5.0 throw a
+            // TypeError (Document::getClassNameForPropertyValue() gets an array). Fixed
+            // upstream by sabre-io/vobject#795.
+            $valueParts = array_filter(\array_slice($parts, 1, null, true), static fn (string $part): bool => 0 === stripos($part, 'VALUE='));
+            $types = [];
+            foreach ($valueParts as $part) {
+                $type = substr($part, 6);
+                array_push($types, ...(str_starts_with($type, '"') ? [$type] : explode(',', $type)));
+            }
+
+            $first = array_key_first($valueParts);
+            if (null !== $first && \count($types) > 1) {
+                $issues[] = \count($valueParts) > 1
+                    ? \sprintf('line %d repeats the VALUE parameter, kept the first one', $number)
+                    : \sprintf('line %d lists several values in the VALUE parameter, kept the first one', $number);
+                $parts[$first] = substr($parts[$first], 0, 6).$types[0];
+                $head = implode(';', array_diff_key($parts, \array_slice($valueParts, 1, null, true)));
                 $line = $head.substr($line, $colon);
             }
 

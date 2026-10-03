@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Fixed
+
+- `VCardDecoder` no longer loses the whole card on a `VALUE` parameter listing several types
+  (`URL;VALUE=uri,text:…`, written by ez-vcard): it keeps the first one and reports it.
+
 ## [0.2.0] - 2026-10-03
 
 ### Added
