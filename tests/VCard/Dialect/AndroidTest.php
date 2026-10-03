@@ -82,6 +82,40 @@ final class AndroidTest extends TestCase
         self::assertSame(['co-worker'], $again->relatedTo['Ann']->relation);
     }
 
+    public function testAKeptTypeGivesWayToAChangedRelation(): void
+    {
+        $decoder = new VCardDecoder(dialects: [new Android()]);
+        $card = $decoder->decode(implode("\r\n", [
+            'BEGIN:VCARD',
+            'VERSION:3.0',
+            'FN:Test',
+            'X-ANDROID-CUSTOM:vnd.android.cursor.item/relation;John;14;;;;;;;;;;;;;',
+            'X-ANDROID-CUSTOM:vnd.android.cursor.item/relation;Ann;8;;;;;;;;;;;;;',
+            'X-ANDROID-CUSTOM:vnd.android.cursor.item/relation;Max;0;Godmother;;;;;;;;;;;;',
+            'X-ANDROID-CUSTOM:vnd.android.cursor.item/relation;Eve;0;Godmother;;;;;;;;;;;;',
+            'END:VCARD',
+            '',
+        ]))[0]->value ?? null;
+        self::assertNotNull($card);
+        $card->relatedTo['John']->relation = ['friend'];
+        $card->relatedTo['Max']->relation = ['friend'];
+
+        $vCard = new VCardEncoder()->encode($card, new Target(VCardVersion::V30, [new Android()]))->value;
+        $unfolded = str_replace("\r\n ", '', $vCard);
+
+        self::assertStringContainsString('relation;John;6;;', $unfolded);
+        self::assertStringContainsString('relation;Ann;8;;', $unfolded);
+        self::assertStringContainsString('relation;Max;6;;', $unfolded);
+        self::assertStringContainsString('relation;Eve;0;Godmother;', $unfolded);
+
+        $again = $decoder->decode($vCard)[0]->value ?? null;
+        self::assertNotNull($again);
+        self::assertSame(['friend'], $again->relatedTo['John']->relation);
+        self::assertSame(['parent'], $again->relatedTo['Ann']->relation);
+        self::assertSame(['friend'], $again->relatedTo['Max']->relation);
+        self::assertSame([], $again->relatedTo['Eve']->relation);
+    }
+
     /**
      * @return iterable<string, array{string, Target}>
      */
