@@ -116,6 +116,11 @@ Versions of a property in other languages (same `ALTID`, another `LANGUAGE`) con
 back. A localization vCard cannot hold, such as a localized label, is written as a `JSPROP` property instead,
 and reported.
 
+Address books also write vendor properties the RFCs do not define, such as Apple's `X-ABRELATEDNAMES`. A
+`Dialect` rewrites them as the RFC properties they mean before reading, and back after writing:
+`new VCardDecoder(dialects: [...])`, `new VCardEncoder(dialects: [...])`. Dialects are opt-in; without them,
+vendor properties are kept verbatim in `vCardProps`.
+
 ### Localizations
 
 ```php
