@@ -54,6 +54,26 @@ final class VCardEncoderTest extends TestCase
         self::assertStringContainsString("item1.X-FOO:bar\r\n", $vCard);
     }
 
+    public function testALabelWithNothingLeftToLabelIsLeftOut(): void
+    {
+        $card = new Card(
+            relatedTo: ['Ann' => new Relation(['parent'], vCardParams: ['group' => 'item2'])],
+            vCardProps: [
+                new VCardProperty('x-ablabel', ['group' => 'item1'], 'unknown', ['spouse']),
+                new VCardProperty('x-ablabel', ['group' => 'item2'], 'unknown', ['mother']),
+                new VCardProperty('x-ablabel', ['group' => 'item3'], 'unknown', ['Godmother']),
+                new VCardProperty('x-abrelatednames', ['group' => 'item3'], 'unknown', ['Max']),
+            ],
+        );
+
+        $result = new VCardEncoder()->encode($card);
+
+        self::assertStringNotContainsString('item1.', $result->value);
+        self::assertStringContainsString("item2.X-ABLABEL:mother\r\n", $result->value);
+        self::assertStringContainsString("item3.X-ABLABEL:Godmother\r\n", $result->value);
+        self::assertSame(['/vCardProps/0: no property left in its group, left the X-ABLabel out'], array_map(strval(...), $result->issues));
+    }
+
     public function testVersion3HasNoPreferenceOrder(): void
     {
         $card = new Card(kind: Card::KIND_GROUP, phones: ['p1' => new Phone('+33612345678', contexts: ['work'], pref: 2)]);
