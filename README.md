@@ -132,6 +132,7 @@ $json = (new JsonEncoder())->encode(new Card(
 
 ```php
 use Rondeto\JSContact\VCard\VCardDecoder;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardEncoder;
 use Rondeto\JSContact\VCard\VCardVersion;
 
@@ -141,7 +142,7 @@ foreach ((new VCardDecoder())->decode(file_get_contents('contacts.vcf')) as $res
 }
 
 // Writes vCard 4.0 by default.
-$result = (new VCardEncoder())->encode($card, VCardVersion::V30);
+$result = (new VCardEncoder())->encode($card, new Target(VCardVersion::V30));
 file_put_contents('contact.vcf', $result->value);
 ```
 
@@ -178,16 +179,20 @@ example, writes a spouse as `X-ABRELATEDNAMES` with the label `_$!<Spouse>!$_`, 
 A `Dialect` teaches the converter one family of these properties: it rewrites them as the standard
 properties they mean before reading, and back after writing. Dialects are opt-in.
 
+To read, pass the dialects to the decoder. The address book a vCard comes from is seldom known, and each
+dialect reads only its own properties: `Dialects::all()` reads them all.
+
+To write, the address book the vCard is for is known: pass a `Target` to `encode()`, the vCard version and
+the dialects that address book reads. `Target::apple()` and `Target::android()` are ready-made.
+
 ```php
-use Rondeto\JSContact\VCard\Dialect\Apple;
-use Rondeto\JSContact\VCard\Dialect\LegacyMessaging;
+use Rondeto\JSContact\VCard\Dialect\Dialects;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
 
-$dialects = [new Apple(), new LegacyMessaging()];
-
-$results = (new VCardDecoder(dialects: $dialects))->decode($vCards); // the spouse is now in relatedTo
-$result = (new VCardEncoder(dialects: $dialects))->encode($card);    // and back to X-ABRELATEDNAMES
+$results = (new VCardDecoder(dialects: Dialects::all()))->decode($vCards); // the spouse is now in relatedTo
+$result = (new VCardEncoder())->encode($card, Target::apple());           // and back to X-ABRELATEDNAMES
 ```
 
 | Dialect           | For                                                                                                                                                         |
@@ -196,9 +201,14 @@ $result = (new VCardEncoder(dialects: $dialects))->encode($card);    // and back
 | `Android`         | The Android contacts app: relations, anniversaries and nicknames in `X-ANDROID-CUSTOM`, dates without a year in vCard 3.0                                   |
 | `LegacyMessaging` | Instant messaging properties from before vCard had `IMPP`: `X-AIM`, `X-ICQ`, `X-JABBER`, `X-SKYPE`…                                                         |
 
-To read, pass every dialect the vCards may use. To write, pass those of the address book the vCard is for,
-since Apple and Android write relations and dates differently. Pass the same list to the decoder and the
-encoder: the encoder applies it in reverse order, so that it works both ways.
+| Target              | Writes                                                                                                   |
+|---------------------|----------------------------------------------------------------------------------------------------------|
+| `Target::apple()`   | vCard 3.0 with `LegacyMessaging` and `Apple`, for Apple Contacts and iCloud, and Google Contacts          |
+| `Target::android()` | vCard 3.0 with `LegacyMessaging` and `Android`: Android exports vCard 2.1, which the encoder does not write |
+
+For any other combination, build one: `new Target(VCardVersion::V30, [new LegacyMessaging()])`. Dialects
+write in the order given, each rewriting what the previous ones left: `LegacyMessaging` comes before `Apple`,
+or Apple's `X-SOCIALPROFILE` would take the AIM user names that address books expect as `X-AIM`.
 
 ### Localizations
 

@@ -10,6 +10,7 @@ use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\VCard\Dialect\Apple;
 use Rondeto\JSContact\VCard\Dialect\LegacyMessaging;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
 use Rondeto\JSContact\VCard\VCardVersion;
@@ -51,7 +52,7 @@ final class LegacyMessagingTest extends TestCase
             'x' => new OnlineService('Jabber', uri: 'xmpp:jdoe@example.com'),
         ]);
 
-        $vCard = new VCardEncoder(dialects: [new LegacyMessaging()])->encode($card, VCardVersion::V30)->value;
+        $vCard = new VCardEncoder()->encode($card, new Target(VCardVersion::V30, [new LegacyMessaging()]))->value;
 
         self::assertStringContainsString("X-AIM;PROP-ID=a;TYPE=work:jdoe\r\n", $vCard);
         self::assertStringContainsString("X-GOOGLE-TALK;PROP-ID=g:jdoe@gmail.com\r\n", $vCard);
@@ -60,14 +61,12 @@ final class LegacyMessagingTest extends TestCase
         self::assertStringContainsString('SOCIALPROFILE;SERVICE-TYPE=Jabber;PROP-ID=x:xmpp:jdoe@example.com', $vCard);
     }
 
-    public function testDialectsWriteInTheReverseOrderTheyRead(): void
+    public function testDialectsWriteInTheOrderGiven(): void
     {
         $card = new Card(onlineServices: ['a' => new OnlineService('AIM', user: 'jdoe')]);
 
-        // Apple would write X-SOCIALPROFILE, had it written first.
-        $vCard = new VCardEncoder(dialects: [new Apple(), new LegacyMessaging()])->encode($card, VCardVersion::V30)->value;
-
-        self::assertStringContainsString("X-AIM;PROP-ID=a:jdoe\r\n", $vCard);
+        self::assertStringContainsString("X-AIM;PROP-ID=a:jdoe\r\n", new VCardEncoder()->encode($card, Target::apple())->value);
+        self::assertStringContainsString("X-SOCIALPROFILE;PROP-ID=a;TYPE=AIM:jdoe\r\n", new VCardEncoder()->encode($card, new Target(VCardVersion::V30, [new Apple(), new LegacyMessaging()]))->value);
     }
 
     /**
@@ -83,11 +82,11 @@ final class LegacyMessagingTest extends TestCase
     #[DataProvider('exports')]
     public function testExportsSurviveARoundTripThroughTheDialects(string $file): void
     {
-        $dialects = [new Apple(), new LegacyMessaging()];
-        foreach (new VCardDecoder(dialects: $dialects)->decode((string) file_get_contents(__DIR__.'/../../Fixtures/CozyVcard/'.$file)) as $result) {
-            $vCard = new VCardEncoder(validate: false, dialects: $dialects)->encode($result->value, VCardVersion::V30)->value;
+        $decoder = new VCardDecoder(dialects: [new Apple(), new LegacyMessaging()]);
+        foreach ($decoder->decode((string) file_get_contents(__DIR__.'/../../Fixtures/CozyVcard/'.$file)) as $result) {
+            $vCard = new VCardEncoder(validate: false)->encode($result->value, Target::apple())->value;
 
-            self::assertEquals($result->value, new VCardDecoder(dialects: $dialects)->decode($vCard)[0]->value ?? null);
+            self::assertEquals($result->value, $decoder->decode($vCard)[0]->value ?? null);
         }
     }
 }

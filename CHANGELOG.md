@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file. The format foll
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/): until `1.0`, a minor release may break the public API.
 
+## [Unreleased]
+
+### Added
+
+- `Target`: the vCard version and dialects `VCardEncoder` writes for, with `Target::apple()` and
+  `Target::android()` ready-made.
+- `Dialects::all()`: every dialect, to read vCards from an unknown address book.
+
+### Changed
+
+- **Breaking**: `VCardEncoder::encode()` and `convert()` take a `Target` instead of a `VCardVersion`, and the
+  `VCardEncoder` constructor no longer takes dialects. Dialects write in the order given, no longer in
+  reverse.
+
 ## [0.1.0] - 2026-10-03
 
 First release.

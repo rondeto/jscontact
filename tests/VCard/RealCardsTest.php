@@ -7,6 +7,7 @@ namespace Rondeto\JSContact\Tests\VCard;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Model\Card;
+use Rondeto\JSContact\VCard\Target;
 use Rondeto\JSContact\VCard\VCardDecoder;
 use Rondeto\JSContact\VCard\VCardEncoder;
 use Rondeto\JSContact\VCard\VCardVersion;
@@ -35,7 +36,7 @@ final class RealCardsTest extends TestCase
     {
         foreach (new VCardDecoder()->decode((string) file_get_contents($file)) as $result) {
             foreach ([VCardVersion::V40, VCardVersion::V30] as $version) {
-                $vCard = new VCardEncoder(validate: false)->encode($result->value, $version)->value;
+                $vCard = new VCardEncoder(validate: false)->encode($result->value, new Target($version))->value;
                 $again = new VCardDecoder()->decode($vCard);
 
                 self::assertCount(1, $again);
