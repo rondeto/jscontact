@@ -10,7 +10,9 @@ use Sabre\VObject\Component\VCard;
 use Sabre\VObject\Property;
 
 /**
- * The vCards of Apple Contacts (macOS, iOS, iCloud), also written by Google Contacts.
+ * The vCard properties Apple's Address Book introduced (the "AB" of X-ABLabel), written by
+ * Apple Contacts and iCloud, and by other address books for compatibility, such as Google
+ * Contacts.
  *
  * Reading rewrites:
  * - X-ABRELATEDNAMES as RELATED, the relation coming from its label (_$!<Mother>!$_ is a parent);
@@ -50,11 +52,6 @@ final readonly class Apple implements Dialect
 
     /** The year Apple gives dates without a year. */
     private const string NO_YEAR = '1604';
-
-    public function rewrites(): array
-    {
-        return ['KIND', 'MEMBER', 'RELATED', 'ANNIVERSARY', 'SOCIALPROFILE'];
-    }
 
     public function read(VCard $vCard): array
     {
@@ -100,6 +97,7 @@ final readonly class Apple implements Dialect
                 'IMPP' => $this->rename($property, 'SERVICE-TYPE', 'X-SERVICE-TYPE'),
                 'KIND' => $this->writeKind($vCard, $property, $issues),
                 'MEMBER' => $this->replace($vCard, $property, 'X-ADDRESSBOOKSERVER-MEMBER', (string) $property, $this->parameters($property)),
+                'JSPROP' => $this->writeDatesWithoutYear($vCard, $property),
                 default => null,
             };
         }
@@ -191,6 +189,49 @@ final readonly class Apple implements Dialect
         }
 
         return [$value, $params];
+    }
+
+    /**
+     * vCard 3.0 has no dates without a year: the conversion writes such birthdays and
+     * wedding anniversaries as JSPROP, which Apple writes in year 1604 instead.
+     */
+    private function writeDatesWithoutYear(VCard $vCard, Property $jsProp): void
+    {
+        $pointer = $this->parts($jsProp, 'JSPTR')[0] ?? '';
+        $value = json_decode((string) $jsProp, true);
+        if ('anniversaries' === $pointer && \is_array($value)) {
+            $anniversaries = $value;
+        } elseif (1 === preg_match('~^anniversaries/([^/]+)$~', $pointer, $matches)) {
+            $anniversaries = [strtr($matches[1], ['~1' => '/', '~0' => '~']) => $value];
+        } else {
+            return;
+        }
+
+        $dates = [];
+        foreach ($anniversaries as $key => $anniversary) {
+            $date = \is_array($anniversary) ? ($anniversary['date'] ?? null) : null;
+            $isDateWithoutYear = \is_array($date) && \is_int($date['month'] ?? null) && \is_int($date['day'] ?? null)
+                && [] === array_diff(array_keys($date), ['@type', 'month', 'day']);
+            $kind = \is_array($anniversary) ? ($anniversary['kind'] ?? null) : null;
+            // Anything more, such as a place, needs the JSPROP.
+            if (!$isDateWithoutYear || !\in_array($kind, ['birth', 'wedding'], true) || [] !== array_diff(array_keys($anniversary), ['@type', 'kind', 'date'])) {
+                return;
+            }
+
+            $dates[(string) $key] = [$kind, \sprintf('%s-%02d-%02d', self::NO_YEAR, $date['month'], $date['day'])];
+        }
+
+        $vCard->remove($jsProp);
+        foreach ($dates as $key => [$kind, $date]) {
+            $params = ['PROP-ID' => $key, 'X-APPLE-OMIT-YEAR' => self::NO_YEAR];
+            if ('birth' === $kind) {
+                $vCard->add('BDAY', $date, $params);
+            } else {
+                $property = $vCard->createProperty('X-ABDATE', $date, $params);
+                $vCard->add($property);
+                $this->writeLabeled($vCard, $property, 'anniversary');
+            }
+        }
     }
 
     /**

@@ -93,12 +93,11 @@ final class Exporter
     /** @var list<array{string, Property}> The properties written, with the path they convert from */
     private array $written = [];
 
-    /**
-     * @param list<string> $rewritten Properties dialects rewrite once written, see Dialect::rewrites()
-     */
+    /** @var array<int, Property> The property each issue is about, if any, by index of the issue */
+    private array $issueSources = [];
+
     public function __construct(
         private readonly VCardVersion $version,
-        private readonly array $rewritten = [],
     ) {
         $this->issues = new IssueCollector();
         $this->vCard = new VCard(['VERSION' => $version->value]);
@@ -503,6 +502,17 @@ final class Exporter
         foreach ($unwritten as $language => $patch) {
             $this->jsProp('localizations/'.$this->escape($language), (object) $patch->patches);
         }
+    }
+
+    /**
+     * The property each issue of the last export is about, by index of the issue: an issue
+     * no longer holds once a dialect replaced its property.
+     *
+     * @return array<int, Property>
+     */
+    public function issueSources(): array
+    {
+        return $this->issueSources;
     }
 
     private function single(string $name, ?string $value, string $path): void
@@ -1066,6 +1076,7 @@ final class Exporter
     private function anniversaries(Card $card): void
     {
         $unwritten = [];
+        $unwrittenIssues = [];
         foreach ($card->anniversaries as $key => $anniversary) {
             $key = (string) $key;
             $path = '/anniversaries/'.$key;
@@ -1077,7 +1088,7 @@ final class Exporter
             };
             $value = Dates::format($anniversary->date, $this->version);
             if (null === $name || null === $value) {
-                $this->issues->add($path, null === $name
+                $unwrittenIssues[$key] = $this->issues->add($path, null === $name
                     ? \sprintf('vCard has no anniversary of kind "%s", wrote it as JSPROP', $anniversary->kind)
                     : 'vCard 3.0 has no partial dates, wrote the anniversary as JSPROP');
                 $unwritten[$key] = $anniversary;
@@ -1116,10 +1127,14 @@ final class Exporter
 
         // A JSPROP needs its parent to exist: the whole map when no anniversary was written.
         if ([] !== $unwritten && \count($unwritten) === \count($card->anniversaries)) {
-            $this->jsProp('anniversaries', $this->json(new Card(anniversaries: $unwritten), 'anniversaries'));
+            $jsProp = $this->jsProp('anniversaries', $this->json(new Card(anniversaries: $unwritten), 'anniversaries'));
+            foreach ($unwrittenIssues as $issue) {
+                $this->issueSources[$issue] = $jsProp;
+            }
         } else {
             foreach ($unwritten as $key => $anniversary) {
-                $this->jsProp('anniversaries/'.$this->escape($key), $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key));
+                $jsProp = $this->jsProp('anniversaries/'.$this->escape($key), $this->json(new Card(anniversaries: [$key => $anniversary]), 'anniversaries', $key));
+                $this->issueSources[$unwrittenIssues[$key]] = $jsProp;
             }
         }
     }
@@ -1382,9 +1397,9 @@ final class Exporter
         }
     }
 
-    private function jsProp(string $pointer, mixed $value): void
+    private function jsProp(string $pointer, mixed $value): Property
     {
-        $this->add('JSPROP', json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR), ['JSPTR' => $pointer]);
+        return $this->add('JSPROP', json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR), ['JSPTR' => $pointer]);
     }
 
     /**
@@ -1395,11 +1410,11 @@ final class Exporter
      * sabre/vobject workaround ($raw): depending on the property and the version, sabre picks a
      * binary class that encodes a URI in base64, or a text class that escapes its commas
      */
-    private function add(string $name, string|array $value, array $params = [], ?string $group = null, string $path = '', bool $raw = false): void
+    private function add(string $name, string|array $value, array $params = [], ?string $group = null, string $path = '', bool $raw = false): Property
     {
-        if (VCardVersion::V30 === $this->version && \in_array($name, self::NOT_IN_V30, true) && !\in_array($name, $this->rewritten, true)) {
-            $this->issues->add($path, \sprintf('vCard 3.0 does not define %s, wrote it anyway', $name));
-        }
+        $issue = VCardVersion::V30 === $this->version && \in_array($name, self::NOT_IN_V30, true)
+            ? $this->issues->add($path, \sprintf('vCard 3.0 does not define %s, wrote it anyway', $name))
+            : null;
 
         // Versions of a property in several languages share an ALTID (RFC 6350, section 5.4).
         if (isset($this->altIds[$path])) {
@@ -1413,26 +1428,26 @@ final class Exporter
             $property = new RawProperty($this->vCard, $name, null, $params, $group);
             $property->setRawMimeDirValue($value);
             $this->vCard->add($property);
-            $this->written[] = [$path, $property];
-
-            return;
+        } else {
+            $property = $this->vCard->createProperty((null === $group ? '' : $group.'.').$name, $value, $params);
+            $this->vCard->add($property);
         }
-
-        $property = $this->vCard->add((null === $group ? '' : $group.'.').$name, $value, $params);
 
         // sabre/vobject workaround: sabre escapes commas in URI values ("geo:1\,2"), which
         // RFC 6350 does not, and does not unescape them when reading URL. Write URIs as is.
         if ($property instanceof Uri && \is_string($value)) {
             $this->vCard->remove($property);
-            $raw = new RawProperty($this->vCard, $property->name ?? $name, null, $params, $group);
-            $raw->setRawMimeDirValue($value);
-            $this->vCard->add($raw);
-            $property = $raw;
+            $property = new RawProperty($this->vCard, $property->name ?? $name, null, $params, $group);
+            $property->setRawMimeDirValue($value);
+            $this->vCard->add($property);
         }
 
-        if ($property instanceof Property) {
-            $this->written[] = [$path, $property];
+        $this->written[] = [$path, $property];
+        if (null !== $issue) {
+            $this->issueSources[$issue] = $property;
         }
+
+        return $property;
     }
 
     /**

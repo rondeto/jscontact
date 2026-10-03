@@ -12,9 +12,14 @@ final class IssueCollector
     /** @var list<Issue> */
     private array $issues = [];
 
-    public function add(string $path, string $message): void
+    /**
+     * @return int The index of the issue in all()
+     */
+    public function add(string $path, string $message): int
     {
         $this->issues[] = new Issue($path, $message);
+
+        return \count($this->issues) - 1;
     }
 
     /**

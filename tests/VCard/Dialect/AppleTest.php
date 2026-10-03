@@ -106,12 +106,48 @@ final class AppleTest extends TestCase
         self::assertSame('FR', $again?->addresses['a1']->countryCode);
     }
 
-    public function testVersion3PropertiesTheDialectRewritesAreNotReported(): void
+    public function testIssuesAboutPropertiesTheDialectReplacedAreDropped(): void
     {
         $card = new Card(kind: Card::KIND_GROUP, members: ['urn:uuid:1'], relatedTo: ['Jane' => new Relation(['friend'])]);
+        self::assertSame([
+            '/kind: vCard 3.0 does not define KIND, wrote it anyway',
+            '/relatedTo/Jane: vCard 3.0 does not define RELATED, wrote it anyway',
+            '/members: vCard 3.0 does not define MEMBER, wrote it anyway',
+        ], array_map(strval(...), new VCardEncoder()->encode($card, VCardVersion::V30)->issues));
 
-        self::assertSame(['/kind: vCard 3.0 does not define KIND, wrote it anyway', '/members: vCard 3.0 does not define MEMBER, wrote it anyway'], array_map(strval(...), new VCardEncoder()->encode(new Card(kind: Card::KIND_GROUP, members: ['urn:uuid:1']), VCardVersion::V30)->issues));
         self::assertSame([], array_map(strval(...), new VCardEncoder(dialects: [new Apple()])->encode($card, VCardVersion::V30)->issues));
+
+        // A KIND Apple has no equivalent for stays, and so does the issue.
+        self::assertSame([
+            '/kind: vCard 3.0 does not define KIND, wrote it anyway',
+            '/kind: Apple has no kind "location", kept KIND',
+        ], array_map(strval(...), new VCardEncoder(dialects: [new Apple()])->encode(new Card(kind: Card::KIND_LOCATION), VCardVersion::V30)->issues));
+    }
+
+    public function testDatesWithoutYearAreWrittenInYear1604InVersion3(): void
+    {
+        $card = new Card(anniversaries: [
+            'b' => new Anniversary(Anniversary::KIND_BIRTH, new PartialDate(null, 4, 12)),
+            'w' => new Anniversary(Anniversary::KIND_WEDDING, new PartialDate(null, 6, 12)),
+        ]);
+
+        self::assertStringContainsString('JSPROP', new VCardEncoder()->encode($card, VCardVersion::V30)->value);
+
+        $result = new VCardEncoder(dialects: [new Apple()])->encode($card, VCardVersion::V30);
+
+        self::assertSame([], array_map(strval(...), $result->issues));
+        self::assertStringNotContainsString('JSPROP', $result->value);
+        self::assertStringContainsString("BDAY;PROP-ID=b;X-APPLE-OMIT-YEAR=1604:1604-04-12\r\n", $result->value);
+        self::assertStringContainsString("item1.X-ABDATE;PROP-ID=w;X-APPLE-OMIT-YEAR=1604:1604-06-12\r\n", $result->value);
+        $again = new VCardDecoder(dialects: [new Apple()])->decode($result->value)[0]->value ?? null;
+        self::assertEquals($card->anniversaries['b'], $again?->anniversaries['b']);
+        self::assertEquals(new PartialDate(null, 6, 12), $again?->anniversaries['w']->date);
+
+        // With a place, the JSPROP is still needed.
+        $withPlace = new Card(anniversaries: ['b' => new Anniversary(Anniversary::KIND_BIRTH, new PartialDate(null, 4, 12), new Address(full: 'Paris'))]);
+        $result = new VCardEncoder(dialects: [new Apple()])->encode($withPlace, VCardVersion::V30);
+        self::assertStringContainsString('JSPROP', $result->value);
+        self::assertSame(['/anniversaries/b: vCard 3.0 has no partial dates, wrote the anniversary as JSPROP'], array_map(strval(...), $result->issues));
     }
 
     /**
