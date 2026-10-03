@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * How another Card relates to a Card, in Card::$relatedTo (RFC 9553, section 2.1.8).
  */
 #[Constraint\ExtraProperties]
-final readonly class Relation
+final class Relation
 {
     public const string ACQUAINTANCE = 'acquaintance';
 

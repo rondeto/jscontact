@@ -11,7 +11,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A free-text note (RFC 9553, section 2.8.3).
  */
 #[Constraint\ExtraProperties]
-final readonly class Note
+final class Note
 {
     /**
      * @param string|null                        $vCardName   The name of the vCard property this object was converted from (RFC 9555, section 2.15.3)

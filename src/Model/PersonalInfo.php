@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * An expertise, hobby or interest (RFC 9553, section 2.8.4).
  */
 #[Constraint\ExtraProperties]
-final readonly class PersonalInfo
+final class PersonalInfo
 {
     public const string KIND_EXPERTISE = 'expertise';
 

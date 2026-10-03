@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * One part of an Address (RFC 9553, section 2.5.1.2).
  */
 #[Constraint\ExtraProperties]
-final readonly class AddressComponent
+final class AddressComponent
 {
     public const string KIND_ROOM = 'room';
 

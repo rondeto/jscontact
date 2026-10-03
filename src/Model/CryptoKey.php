@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A public key or certificate (RFC 9553, section 2.6.1).
  */
 #[Constraint\ExtraProperties]
-final readonly class CryptoKey
+final class CryptoKey
 {
     /**
      * @param string                             $uri         A URI, which may be a "data:" URI embedding the resource

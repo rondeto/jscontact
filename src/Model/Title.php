@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A job title or functional position (RFC 9553, section 2.2.5).
  */
 #[Constraint\ExtraProperties]
-final readonly class Title
+final class Title
 {
     public const string KIND_TITLE = 'title';
 

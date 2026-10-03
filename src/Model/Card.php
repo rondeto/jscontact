@@ -22,7 +22,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[Constraint\TitleOrganizations]
 #[Constraint\Localizations]
 #[Constraint\ExtraProperties(Registry::UNMODELED_CARD_PROPERTIES)]
-final readonly class Card
+final class Card
 {
     public const string KIND_INDIVIDUAL = 'individual';
 

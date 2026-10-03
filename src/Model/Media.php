@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A photo, logo or sound of the entity a Card represents (RFC 9553, section 2.6.4).
  */
 #[Constraint\ExtraProperties]
-final readonly class Media
+final class Media
 {
     public const string KIND_PHOTO = 'photo';
 

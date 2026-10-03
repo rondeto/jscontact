@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A link to a resource that fits no more specific property (RFC 9553, section 2.6.3).
  */
 #[Constraint\ExtraProperties]
-final readonly class Link
+final class Link
 {
     public const string KIND_CONTACT = 'contact';
 

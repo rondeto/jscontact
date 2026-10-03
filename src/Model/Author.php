@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[Constraint\AtLeastOneProperty(['name', 'uri', 'extra'], 'an author needs at least one property')]
 #[Constraint\ExtraProperties]
-final readonly class Author
+final class Author
 {
     /**
      * @param string|null                        $vCardName   The name of the vCard property this object was converted from (RFC 9555, section 2.15.3)

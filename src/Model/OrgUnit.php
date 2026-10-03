@@ -11,7 +11,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A unit of an Organization, such as a division or a department (RFC 9553, section 2.2.3).
  */
 #[Constraint\ExtraProperties]
-final readonly class OrgUnit
+final class OrgUnit
 {
     /**
      * @param string|null                        $sortAs      Verbatim value to sort the unit among units of the same level

@@ -16,7 +16,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[Constraint\AtLeastOneProperty(['uri', 'user'], 'an online service needs a uri, a user, or both')]
 #[Constraint\ExtraProperties]
-final readonly class OnlineService
+final class OnlineService
 {
     /**
      * @param string|null                        $service     Name of the service or protocol, e.g. "Mastodon"

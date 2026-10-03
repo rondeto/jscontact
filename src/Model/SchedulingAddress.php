@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * An address to send calendar scheduling invitations to (RFC 9553, section 2.4.2).
  */
 #[Constraint\ExtraProperties]
-final readonly class SchedulingAddress
+final class SchedulingAddress
 {
     /**
      * @param string                             $uri         Such as a "mailto:" URI

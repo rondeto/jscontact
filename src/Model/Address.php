@@ -14,7 +14,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[Constraint\AtLeastOneProperty(['components', 'coordinates', 'countryCode', 'full', 'timeZone'], 'an address needs at least one of components, coordinates, countryCode, full or timeZone')]
 #[Constraint\Components]
 #[Constraint\ExtraProperties]
-final readonly class Address
+final class Address
 {
     /**
      * @param list<AddressComponent>             $components

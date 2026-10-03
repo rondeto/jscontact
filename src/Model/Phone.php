@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * A phone number (RFC 9553, section 2.3.3).
  */
 #[Constraint\ExtraProperties]
-final readonly class Phone
+final class Phone
 {
     public const string FEATURE_MOBILE = 'mobile';
 
