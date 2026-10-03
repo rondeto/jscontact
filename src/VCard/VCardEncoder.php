@@ -8,6 +8,7 @@ use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\InvalidCardException;
+use Rondeto\JSContact\VCard\Dialect\Dialect;
 use Rondeto\JSContact\VCard\Internal\Exporter;
 use Sabre\VObject\Component\VCard;
 
@@ -20,12 +21,19 @@ use Sabre\VObject\Component\VCard;
  *
  * Writing is strict by default: a Card that breaks the JSContact specification is refused.
  * Pass validate: false to write it anyway.
+ *
+ * Dialects then rewrite RFC properties as the vendor properties they stand for, in the
+ * order given.
  */
 final readonly class VCardEncoder
 {
+    /**
+     * @param list<Dialect> $dialects
+     */
     public function __construct(
         private bool $validate = true,
         private CardValidator $validator = new CardValidator(),
+        private array $dialects = [],
     ) {
     }
 
@@ -53,6 +61,12 @@ final readonly class VCardEncoder
             throw new InvalidCardException($issues);
         }
 
-        return new Exporter($version)->export($card);
+        $result = new Exporter($version)->export($card);
+        $issues = $result->issues;
+        foreach ($this->dialects as $dialect) {
+            array_push($issues, ...$dialect->write($result->value));
+        }
+
+        return new Result($result->value, $issues);
     }
 }

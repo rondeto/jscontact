@@ -9,6 +9,7 @@ use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Validation\CardValidator;
 use Rondeto\JSContact\Validation\InvalidCardException;
+use Rondeto\JSContact\VCard\Dialect\Dialect;
 use Rondeto\JSContact\VCard\Internal\Importer;
 use Rondeto\JSContact\VCard\Internal\Parser;
 use Sabre\VObject\Component\VCard;
@@ -24,12 +25,19 @@ use Sabre\VObject\Component\VCard;
  * gives the same keys.
  *
  * With strict: true, any issue makes the conversion fail instead.
+ *
+ * Dialects first rewrite the vendor properties they know as the RFC properties they mean,
+ * in the order given.
  */
 final readonly class VCardDecoder
 {
+    /**
+     * @param list<Dialect> $dialects
+     */
     public function __construct(
         private bool $strict = false,
         private CardValidator $validator = new CardValidator(),
+        private array $dialects = [],
     ) {
     }
 
@@ -48,7 +56,7 @@ final readonly class VCardDecoder
             if (null === $parsed->vCard) {
                 $result = new Result(new Card(), array_map(static fn (string $issue): Issue => new Issue('', $issue), $parsed->issues));
             } else {
-                $result = new Importer($parsed->rawValues, $this->validator)->import($parsed->vCard, $parsed->issues);
+                $result = $this->import($parsed->vCard, $parsed->rawValues, $parsed->issues);
             }
 
             $results[] = $this->checked($result);
@@ -69,7 +77,26 @@ final readonly class VCardDecoder
      */
     public function convert(VCard $vCard): Result
     {
-        return $this->checked(new Importer([], $this->validator)->import($vCard));
+        // Dialects rewrite the vCard: leave the caller's one as it is.
+        return $this->checked($this->import(clone $vCard, []));
+    }
+
+    /**
+     * @param array<string, list<string>> $rawValues   See ParsedCard
+     * @param list<string>                $parseIssues
+     *
+     * @return Result<Card>
+     */
+    private function import(VCard $vCard, array $rawValues, array $parseIssues = []): Result
+    {
+        $dialectIssues = [];
+        foreach ($this->dialects as $dialect) {
+            array_push($dialectIssues, ...$dialect->read($vCard));
+        }
+
+        $result = new Importer($rawValues, $this->validator)->import($vCard, $parseIssues);
+
+        return [] === $dialectIssues ? $result : new Result($result->value, [...$dialectIssues, ...$result->issues]);
     }
 
     /**
