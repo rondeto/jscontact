@@ -93,8 +93,12 @@ final class Exporter
     /** @var list<array{string, Property}> The properties written, with the path they convert from */
     private array $written = [];
 
+    /**
+     * @param list<string> $rewritten Properties dialects rewrite once written, see Dialect::rewrites()
+     */
     public function __construct(
         private readonly VCardVersion $version,
+        private readonly array $rewritten = [],
     ) {
         $this->issues = new IssueCollector();
         $this->vCard = new VCard(['VERSION' => $version->value]);
@@ -1393,7 +1397,7 @@ final class Exporter
      */
     private function add(string $name, string|array $value, array $params = [], ?string $group = null, string $path = '', bool $raw = false): void
     {
-        if (VCardVersion::V30 === $this->version && \in_array($name, self::NOT_IN_V30, true)) {
+        if (VCardVersion::V30 === $this->version && \in_array($name, self::NOT_IN_V30, true) && !\in_array($name, $this->rewritten, true)) {
             $this->issues->add($path, \sprintf('vCard 3.0 does not define %s, wrote it anyway', $name));
         }
 

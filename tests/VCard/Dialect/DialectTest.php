@@ -59,6 +59,11 @@ final class DialectTest extends TestCase
  */
 final class NicknameDialect implements Dialect
 {
+    public function rewrites(): array
+    {
+        return [];
+    }
+
     public function read(VCard $vCard): array
     {
         $issues = [];

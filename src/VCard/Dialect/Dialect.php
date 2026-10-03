@@ -20,6 +20,14 @@ use Sabre\VObject\Component\VCard;
 interface Dialect
 {
     /**
+     * The RFC properties write() rewrites as vendor properties: writing them is not reported
+     * when the vCard version does not define them.
+     *
+     * @return list<string> Uppercase property names
+     */
+    public function rewrites(): array;
+
+    /**
      * Rewrites the vendor properties of a vCard as the RFC properties they mean.
      *
      * @return list<Issue> What could not be rewritten faithfully; the path is empty, as

@@ -61,7 +61,12 @@ final readonly class VCardEncoder
             throw new InvalidCardException($issues);
         }
 
-        $result = new Exporter($version)->export($card);
+        $rewritten = [];
+        foreach ($this->dialects as $dialect) {
+            array_push($rewritten, ...$dialect->rewrites());
+        }
+
+        $result = new Exporter($version, $rewritten)->export($card);
         $issues = $result->issues;
         foreach ($this->dialects as $dialect) {
             array_push($issues, ...$dialect->write($result->value));

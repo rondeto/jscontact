@@ -121,6 +121,10 @@ Address books also write vendor properties the RFCs do not define, such as Apple
 `new VCardDecoder(dialects: [...])`, `new VCardEncoder(dialects: [...])`. Dialects are opt-in; without them,
 vendor properties are kept verbatim in `vCardProps`.
 
+| Dialect | Reads and writes                                                                                     |
+|---------|------------------------------------------------------------------------------------------------------|
+| `Apple` | Apple Contacts and iCloud, also Google Contacts: `X-ABRELATEDNAMES`, `X-ABDATE`, `X-ABADR`, `X-SOCIALPROFILE`, `X-ABShowAs`, `X-ADDRESSBOOKSERVER-KIND`/`-MEMBER`, built-in labels such as `_$!<HomePage>!$_`, and dates of year 1604, Apple's "no year" |
+
 ### Localizations
 
 ```php
