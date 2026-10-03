@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-03
+
 ### Added
 
 - `Target`: the vCard version and dialects `VCardEncoder` writes for, with `Target::apple()` and
@@ -67,4 +69,6 @@ First release.
 - Some sabre/vobject behaviors are worked around, see the `sabre/vobject workaround:` comments. The
   workarounds go once sabre/vobject 5 ships the fixes.
 
+[Unreleased]: https://github.com/rondeto/jscontact/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rondeto/jscontact/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rondeto/jscontact/releases/tag/v0.1.0
