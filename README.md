@@ -9,7 +9,7 @@ contact data, and for converting between vCard and JSContact.
 
 - A **typed JSContact 2.0 model**: [RFC 9553](https://www.rfc-editor.org/rfc/rfc9553.html) as updated by
   [RFC 9982](https://www.rfc-editor.org/rfc/rfc9982.html), with JSON serialization, deserialization and
-  validation. The model has no dependencies.
+  validation. Validation rules are [Symfony Validator](https://symfony.com/doc/current/validation.html) constraints.
 - **vCard ⇄ JSContact conversion** as specified by [RFC 9555](https://www.rfc-editor.org/rfc/rfc9555.html)
   (updated by RFC 9982), including the vCard properties added by
   [RFC 9554](https://www.rfc-editor.org/rfc/rfc9554.html). vCard text is read and written with
@@ -61,6 +61,12 @@ the RFC 9555 properties `vCardName`, `vCardParams` and `vCardProps`.
 Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
 back unchanged. vCard properties that cannot be converted and vendor extensions are
 kept verbatim in `vCardProps`, as RFC 9555 allows, and written back unchanged.
+
+## Installation
+
+```sh
+composer require rondeto/jscontact
+```
 
 ## Usage
 

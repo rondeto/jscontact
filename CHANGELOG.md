@@ -1,0 +1,46 @@
+# Changelog
+
+All notable changes to this project are documented in this file. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
+[Semantic Versioning](https://semver.org/): until `1.0`, a minor release may break the public API.
+
+## [0.1.0] - 2026-10-03
+
+First release.
+
+### Added
+
+- **JSContact model**: typed, immutable classes for every property of a JSContact 2.0 Card
+  ([RFC 9553](https://www.rfc-editor.org/rfc/rfc9553.html), as updated by
+  [RFC 9982](https://www.rfc-editor.org/rfc/rfc9982.html)), localizations included. Properties the
+  model does not know are kept in `extra`.
+- **JSON**:
+  - `JsonDecoder` reads Cards leniently. Invalid values are skipped or corrected, and reported as issues
+    pointing into the JSON. With `strict: true`, it throws an `InvalidCardException` instead.
+  - `JsonEncoder` refuses invalid Cards. With `validate: false`, it writes them anyway.
+- **Validation**: `CardValidator`, built on [Symfony Validator](https://symfony.com/doc/current/validation.html)
+  constraints declared on the model classes.
+- **vCard**:
+  - `VCardDecoder` reads vCard 2.1, 3.0 and 4.0, and `VCardEncoder` writes vCard 3.0 and 4.0, following
+    [RFC 9555](https://www.rfc-editor.org/rfc/rfc9555.html). This includes the properties of
+    [RFC 9554](https://www.rfc-editor.org/rfc/rfc9554.html), `ALTID`/`LANGUAGE` versions and phonetic names
+    and addresses.
+  - What cannot be converted is kept in `vCardProps`, `vCardParams` and `JSPROP`, and reported as an issue.
+  - Map keys come from `PROP-ID`, or are named after the property (`EMAIL-1`), so that converting the same
+    vCard twice gives the same keys.
+- **Localizations**: `Localizer` gives a Card in a language, and builds the localization between a Card and
+  its localized version.
+- **vCard dialects**, opt-in rewrites of vendor properties to and from the RFC ones:
+  - `Apple`: `X-ABRELATEDNAMES`, `X-ABDATE`, `X-ABADR`, `X-SOCIALPROFILE`, `X-ABShowAs`,
+    `X-ADDRESSBOOKSERVER-*`, built-in labels, and dates without a year. Google Contacts writes these too.
+  - `Android`: relations, wedding anniversaries and nicknames in `X-ANDROID-CUSTOM`, and dates without a year.
+  - `LegacyMessaging`: `X-AIM`, `X-ICQ`, `X-JABBER`, `X-MSN`, `X-YAHOO`, `X-SKYPE`, `X-QQ`, `X-GOOGLE-TALK`…
+
+### Known limitations
+
+- Apple and Android phonetic names (`X-PHONETIC-*`) are kept verbatim: they give no phonetic system or
+  script, which JSContact requires.
+- Some sabre/vobject behaviors are worked around, see the `sabre/vobject workaround:` comments. The
+  workarounds go once sabre/vobject 5 ships the fixes.
+
+[0.1.0]: https://github.com/rondeto/jscontact/releases/tag/v0.1.0
