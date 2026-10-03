@@ -20,6 +20,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[Constraint\GroupMembers]
 #[Constraint\TitleOrganizations]
+#[Constraint\Localizations]
 #[Constraint\ExtraProperties(Registry::UNMODELED_CARD_PROPERTIES)]
 final readonly class Card
 {
@@ -50,6 +51,7 @@ final readonly class Card
      * @param array<array-key, LanguagePref>      $preferredLanguages
      * @param array<array-key, Relation>          $relatedTo           The uid of each related Card, and how it relates
      * @param array<array-key, PersonalInfo>      $personalInfo
+     * @param array<array-key, PatchObject>       $localizations       The Card in other languages, by language tag (RFC 9553, section 2.7.1); see Localizer
      * @param array<array-key, EmailAddress>      $emails
      * @param array<array-key, Phone>             $phones
      * @param array<array-key, Address>           $addresses
@@ -115,6 +117,7 @@ final readonly class Card
         public array $relatedTo = [],
         #[Constraint\IdKeys, Assert\Valid]
         public array $personalInfo = [],
+        public array $localizations = [],
         #[Constraint\RegisteredValue]
         public array $keywords = [],
         #[Assert\Regex('/^[A-Za-z0-9-]+$/', message: 'not a vCard property name')]

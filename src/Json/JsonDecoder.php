@@ -26,6 +26,7 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PatchObject;
 use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
@@ -151,6 +152,7 @@ final readonly class JsonDecoder
                 extra: $relation->extra(),
             ), keysAreIds: false),
             personalInfo: $this->map($object, 'personalInfo', 'PersonalInfo', $this->personalInfo(...)),
+            localizations: $this->localizations($object),
             keywords: $object->set('keywords'),
             vCardName: $object->string('vCardName'),
             vCardParams: $object->vCardParams(),
@@ -486,6 +488,22 @@ final readonly class JsonDecoder
             vCardParams: $object->vCardParams(),
             extra: $object->extra(),
         );
+    }
+
+    /**
+     * Language tags and PatchObjects (RFC 9553, section 2.7.1). Their values are any JSON;
+     * the validator checks them by applying them.
+     *
+     * @return array<string, PatchObject>
+     */
+    private function localizations(JsonObject $card): array
+    {
+        $localizations = [];
+        foreach ($card->rawObjectMap('localizations') as $language => $patches) {
+            $localizations[$language] = new PatchObject($patches);
+        }
+
+        return $localizations;
     }
 
     private function schedulingAddress(JsonObject $object): ?SchedulingAddress

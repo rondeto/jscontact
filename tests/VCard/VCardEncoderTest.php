@@ -6,6 +6,7 @@ namespace Rondeto\JSContact\Tests\VCard;
 
 use PHPUnit\Framework\TestCase;
 use Rondeto\JSContact\Model\Address;
+use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Card;
 use Rondeto\JSContact\Model\CryptoKey;
@@ -13,9 +14,12 @@ use Rondeto\JSContact\Model\EmailAddress;
 use Rondeto\JSContact\Model\LanguagePref;
 use Rondeto\JSContact\Model\Link;
 use Rondeto\JSContact\Model\Media;
+use Rondeto\JSContact\Model\Name;
+use Rondeto\JSContact\Model\NameComponent;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PatchObject;
 use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
@@ -66,16 +70,15 @@ final class VCardEncoderTest extends TestCase
     {
         $card = new Card(
             phones: ['p1' => new Phone('tel:+1', features: ['hologram'], contexts: ['example.com:car'])],
-            extra: ['localizations' => ['fr' => ['name/full' => 'ACME']]],
+            extra: ['example.com:map' => ['fr' => ['name/full' => 'ACME']]],
         );
 
         $result = new VCardEncoder()->encode($card);
 
-        self::assertStringContainsString('JSPROP;JSPTR=localizations:{"fr":{"name/full":"ACME"}}', $result->value);
+        self::assertStringContainsString('JSPROP;JSPTR="example.com:map":{"fr":{"name/full":"ACME"}}', $result->value);
         self::assertSame([
             '/phones/p1/features/hologram: vCard has no TEL type for this feature, left it out',
             '/phones/p1/contexts/example.com:car: vCard has no TYPE for this context, left it out',
-            '/localizations: not converted to vCard properties yet, wrote it as JSPROP',
         ], array_map(strval(...), $result->issues));
     }
 
@@ -233,5 +236,96 @@ final class VCardEncoderTest extends TestCase
         self::assertStringContainsString("item1.GEO;PROP-ID=a2:geo:2,2\r\nitem1.TZ:Europe/Paris\r\n", $v40);
         $again = new VCardDecoder()->decode($v40)[0]->value ?? null;
         self::assertSame('Europe/Paris', $again?->addresses['a2']->timeZone);
+    }
+
+    public function testLocalizationsAreWrittenAsVersionsInOtherLanguages(): void
+    {
+        $card = new Card(
+            language: 'en',
+            name: new Name([new NameComponent('surname', 'Doe'), new NameComponent('given', 'John')], full: 'John Doe'),
+            speakToAs: new SpeakToAs('masculine', ['k1' => new Pronouns('he/him')]),
+            titles: ['t1' => new Title('Boss', Title::KIND_TITLE)],
+            emails: ['e1' => new EmailAddress('john@example.com', label: 'Work', vCardParams: ['group' => 'item1'])],
+            localizations: [
+                'fr' => new PatchObject(['titles/t1/name' => 'Patron', 'speakToAs/pronouns/k1/pronouns' => 'il', 'emails/e1/address' => 'jean@example.fr']),
+                'ja' => new PatchObject(['name/full' => 'ジョン・ドウ', 'name/components/0/value' => 'ドウ', 'name/components/1/value' => 'ジョン']),
+            ],
+        );
+
+        $result = new VCardEncoder()->encode($card);
+
+        self::assertSame([], array_map(strval(...), $result->issues));
+        self::assertSame([
+            'BEGIN:VCARD',
+            'VERSION:4.0',
+            'LANGUAGE:en',
+            'N;ALTID=4:Doe;John;;;;;',
+            'N;ALTID=4;LANGUAGE=ja:ドウ;ジョン;;;;;',
+            'FN;ALTID=4:John Doe',
+            'FN;ALTID=4;LANGUAGE=ja:ジョン・ドウ',
+            'item1.EMAIL;PROP-ID=e1;ALTID=3:john@example.com',
+            'item1.EMAIL;PROP-ID=e1;ALTID=3;LANGUAGE=fr:jean@example.fr',
+            'item1.X-ABLABEL:Work',
+            'GRAMGENDER:masculine',
+            'PRONOUNS;PROP-ID=k1;ALTID=1:he/him',
+            'PRONOUNS;PROP-ID=k1;ALTID=1;LANGUAGE=fr:il',
+            'TITLE;PROP-ID=t1;ALTID=2:Boss',
+            'TITLE;PROP-ID=t1;ALTID=2;LANGUAGE=fr:Patron',
+            'END:VCARD',
+        ], explode("\r\n", rtrim($result->value)));
+        self::assertEquals($card, new VCardDecoder()->decode($result->value)[0]->value ?? null);
+    }
+
+    public function testPhoneticsAreWrittenAsPhoneticVersions(): void
+    {
+        $card = new Card(
+            language: 'zh-Hant',
+            name: new Name([new NameComponent('surname', '孫'), new NameComponent('given', '中山')]),
+            addresses: ['a1' => new Address(
+                [new AddressComponent('locality', '香港', 'hoeng1gong2'), new AddressComponent('country', '中國')],
+                phoneticScript: 'Latn',
+                phoneticSystem: 'jyut',
+            )],
+            localizations: ['yue' => new PatchObject([
+                'name/phoneticSystem' => 'jyut',
+                'name/components/0/phonetic' => 'syun1',
+                'name/components/1/phonetic' => 'zung1saan1',
+            ])],
+        );
+
+        $result = new VCardEncoder()->encode($card);
+
+        self::assertSame([], array_map(strval(...), $result->issues));
+        // Only the phonetics are localized: only the phonetic N has a version in that language.
+        self::assertStringContainsString("N;ALTID=2:孫;中山;;;;;\r\nN;PHONETIC=jyut;ALTID=2;LANGUAGE=yue:syun1;zung1saan1;;;;;\r\nFN;DERIVED=TRUE:中山 孫\r\n", $result->value);
+        self::assertStringContainsString("ADR;PROP-ID=a1;ALTID=1:;;;香港;;;中國\r\nADR;PHONETIC=jyut;SCRIPT=Latn;ALTID=1:;;;hoeng1gong2;;;\r\n", $result->value);
+        self::assertEquals($card, new VCardDecoder()->decode($result->value)[0]->value ?? null);
+    }
+
+    public function testLocalizationsVCardCannotHoldAreWrittenAsJsProp(): void
+    {
+        $card = new Card(
+            titles: ['t1' => new Title('Boss', Title::KIND_TITLE)],
+            emails: ['e1' => new EmailAddress('john@example.com', label: 'Work', vCardParams: ['group' => 'item1'])],
+            localizations: [
+                'fr' => new PatchObject(['titles/t1/name' => 'Patron', 'emails/e1/label' => 'Travail']),
+                'de' => new PatchObject(['titles/t1/name' => 'Chef']),
+            ],
+        );
+
+        $result = new VCardEncoder()->encode($card);
+
+        self::assertSame(['/localizations/fr: vCard cannot hold this localization, wrote it as JSPROP'], array_map(strval(...), $result->issues));
+        self::assertStringContainsString("TITLE;PROP-ID=t1;ALTID=1;LANGUAGE=de:Chef\r\n", $result->value);
+        self::assertStringContainsString('JSPROP;JSPTR=localizations/fr:{"titles/t1/name":"Patron"\\,"emails/e1/label":"Travail"}', str_replace("\r\n ", '', $result->value));
+        self::assertEquals($card, new VCardDecoder()->decode($result->value)[0]->value ?? null);
+
+        // Without any language vCard can hold, the whole map.
+        $card = new Card(titles: ['t1' => new Title('Boss', Title::KIND_TITLE)], localizations: ['fr' => new PatchObject(['titles/t2' => (object) ['name' => 'Patron']])]);
+        $result = new VCardEncoder()->encode($card);
+
+        self::assertStringContainsString('JSPROP;JSPTR=localizations:{"fr":{"titles/t2":{"name":"Patron"}}}', $result->value);
+        self::assertStringNotContainsString('ALTID', $result->value);
+        self::assertEquals($card, new VCardDecoder()->decode($result->value)[0]->value ?? null);
     }
 }

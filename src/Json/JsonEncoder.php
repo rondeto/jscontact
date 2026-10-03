@@ -23,6 +23,7 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
+use Rondeto\JSContact\Model\PatchObject;
 use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
@@ -118,6 +119,7 @@ final readonly class JsonEncoder
                 'vCardName' => $relation->vCardName,
                 'vCardParams' => $this->vCardParams($relation->vCardParams),
             ], $relation->extra)),
+            'localizations' => $this->map($card->localizations, static fn (PatchObject $patch): \stdClass => (object) $patch->patches),
             'personalInfo' => $this->map($card->personalInfo, fn (PersonalInfo $info): \stdClass => $this->object([
                 'kind' => $info->kind,
                 'value' => $info->value,

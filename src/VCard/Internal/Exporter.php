@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\VCard\Internal;
 
+use Rondeto\JSContact\Conversion\Issue;
 use Rondeto\JSContact\Conversion\IssueCollector;
 use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Json\JsonEncoder;
+use Rondeto\JSContact\Localization\Internal\Diff;
+use Rondeto\JSContact\Localization\Internal\Patch;
+use Rondeto\JSContact\Localization\Localizer;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\Anniversary;
 use Rondeto\JSContact\Model\Calendar;
@@ -22,11 +26,11 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PatchObject;
 use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Title;
 use Rondeto\JSContact\Model\VCardProperty;
-use Rondeto\JSContact\Validation\Registry;
 use Rondeto\JSContact\Validation\Syntax;
 use Rondeto\JSContact\VCard\VCardVersion;
 use Sabre\VObject\Component\VCard;
@@ -77,6 +81,18 @@ final class Exporter
     /** @var array<string, true> Uppercase names of the properties kept verbatim */
     private array $verbatim = [];
 
+    /**
+     * @var array<string, string>|null The ALTID of the properties written for each path, set
+     *                                 before a pass in another language
+     */
+    private ?array $altIds = null;
+
+    /** The language of the pass, when it writes the Card in another language */
+    private ?string $alternativeLanguage = null;
+
+    /** @var list<array{string, Property}> The properties written, with the path they convert from */
+    private array $written = [];
+
     public function __construct(
         private readonly VCardVersion $version,
     ) {
@@ -93,6 +109,7 @@ final class Exporter
     public function export(Card $card): Result
     {
         $this->collectGroups($card);
+        [$alternatives, $unwritten] = null === $this->altIds ? $this->localizations($card) : [[], []];
 
         $this->single('UID', $card->uid, '/uid');
         $this->single('PRODID', $card->prodId, '/prodId');
@@ -154,10 +171,334 @@ final class Exporter
             $this->add('CATEGORIES', $card->keywords);
         }
 
+        foreach ($alternatives as $properties) {
+            foreach ($properties as $property) {
+                $this->copy($property);
+            }
+        }
+
         $this->verbatim($card->vCardProps);
         $this->unknown($card);
+        $this->unwrittenLocalizations($unwritten, \count($card->localizations));
 
         return new Result($this->vCard, $this->issues->all());
+    }
+
+    /**
+     * Sorts the localizations of a Card (RFC 9553, section 2.7.1) into those vCard holds, as
+     * versions of properties with the same ALTID and a LANGUAGE (RFC 9555, section 2.3.11),
+     * and the others, written as JSPROP. A language converts as a whole: when each of its
+     * patches localizes a property the Card has, which converts to the same vCard properties.
+     * A pass writes the Card in that language; its versions of those properties are kept.
+     *
+     * Also sets the ALTID of the properties with versions, and of phonetic names and
+     * addresses (RFC 9555, section 2.3.15).
+     *
+     * @return array{array<string, list<Property>>, array<string, PatchObject>} Versions by language, and the localizations vCard cannot hold
+     */
+    private function localizations(Card $card): array
+    {
+        $phonetic = [];
+        if (null !== $card->name && (null !== $card->name->phoneticSystem || null !== $card->name->phoneticScript)) {
+            $phonetic['/name'] = true;
+        }
+
+        foreach ($card->addresses as $key => $address) {
+            if (null !== $address->phoneticSystem || null !== $address->phoneticScript) {
+                $phonetic['/addresses/'.$key] = true;
+            }
+        }
+
+        $localizer = new Localizer();
+        $candidates = [];
+        $unwritten = [];
+        foreach ($card->localizations as $language => $localization) {
+            $language = (string) $language;
+            $localized = $localizer->localize($card, $language);
+            $units = [] === $localized->issues ? $this->localizedUnits($card, $localized->value) : null;
+            if (null === $units || [] === $units) {
+                $unwritten[$language] = $localization;
+            } else {
+                $candidates[$language] = [$localized->value, $units];
+            }
+        }
+
+        $paths = $phonetic;
+        foreach ($candidates as [, $units]) {
+            foreach ($units as $unit => $isPhonetic) {
+                foreach ($this->unitPaths($unit, $isPhonetic) as $path) {
+                    $paths[$path] = true;
+                }
+            }
+        }
+
+        $this->altIds = $this->allocateAltIds($card, array_keys($paths));
+        if ([] === $candidates) {
+            return [[], $unwritten];
+        }
+
+        $base = new self($this->version);
+        $base->altIds = $this->altIds;
+
+        $baseIssues = $base->export($localizer->localize($card, '')->value)->issues;
+
+        $alternatives = [];
+        $kept = $phonetic;
+        foreach ($candidates as $language => [$localized, $units]) {
+            $pass = new self($this->version);
+            $pass->altIds = $this->altIds;
+            $pass->alternativeLanguage = $language;
+            $issues = $pass->export($localized)->issues;
+
+            $properties = [];
+            foreach ($units as $unit => $isPhonetic) {
+                $unitPaths = $this->unitPaths($unit, $isPhonetic);
+                $versions = $pass->writtenAt($unitPaths);
+                $phoneticVersions = array_filter($versions, static fn (Property $property): bool => isset($property['PHONETIC']));
+                $isSame = $this->names($base->writtenAt($unitPaths)) === $this->names($versions)
+                    && $this->issuesAt($baseIssues, $unit) === $this->issuesAt($issues, $unit);
+                if (!$isSame || [] === $versions || ($isPhonetic && [] === $phoneticVersions)) {
+                    $properties = null;
+                    break;
+                }
+
+                array_push($properties, ...array_values($isPhonetic ? $phoneticVersions : $versions));
+            }
+
+            if (null === $properties) {
+                $unwritten[$language] = $card->localizations[$language];
+                continue;
+            }
+
+            $alternatives[$language] = $properties;
+            foreach ($units as $unit => $isPhonetic) {
+                foreach ($this->unitPaths($unit, $isPhonetic) as $path) {
+                    $kept[$path] = true;
+                }
+            }
+        }
+
+        $this->altIds = array_intersect_key($this->altIds, $kept);
+
+        return [$alternatives, $unwritten];
+    }
+
+    /**
+     * The properties of the Card a localization changes, by path, and whether it only
+     * changes their phonetics. Null if it changes anything else.
+     *
+     * @return array<string, bool>|null
+     */
+    private function localizedUnits(Card $card, Card $localized): ?array
+    {
+        $encoder = new JsonEncoder(validate: false);
+        $units = [];
+        foreach (Diff::between($encoder->normalize($card), $encoder->normalize($localized), ['@type', 'version', 'language', 'localizations']) as $path => $value) {
+            $tokens = Patch::tokens((string) $path);
+            $unit = null === $tokens || null === $value ? null : $this->unit($card, $localized, $tokens);
+            if (null === $unit) {
+                return null;
+            }
+
+            [$unitPath, $field] = $unit;
+            $isPhonetic = 1 === preg_match('~^(phoneticSystem|phoneticScript|components/\d+/phonetic)$~', $field);
+            $units[$unitPath] = ($units[$unitPath] ?? true) && $isPhonetic;
+        }
+
+        return $units;
+    }
+
+    /**
+     * The property of the Card a patch path is in, and the path inside it. Null if vCard has
+     * no versions of it in other languages: labels, kinds, and properties this library does
+     * not convert to a vCard value or parameter.
+     *
+     * @param non-empty-list<string> $tokens
+     *
+     * @return array{string, string}|null
+     */
+    private function unit(Card $card, Card $localized, array $tokens): ?array
+    {
+        $isLocalizable = static fn (?object $object, ?string $field): bool => null !== $object && null !== $field && property_exists($object, $field)
+            && !\in_array($field, ['label', 'kind', 'extra', 'vCardName', 'vCardParams'], true);
+
+        if ('name' === $tokens[0]) {
+            return $isLocalizable($card->name, $tokens[1] ?? null) ? ['/name', implode('/', \array_slice($tokens, 1))] : null;
+        }
+
+        if (['speakToAs', 'grammaticalGender'] === $tokens) {
+            return null === $card->speakToAs?->grammaticalGender ? null : ['/speakToAs/grammaticalGender', ''];
+        }
+
+        if ('speakToAs' === $tokens[0] && 'pronouns' === ($tokens[1] ?? null) && isset($tokens[2])) {
+            $pronouns = $card->speakToAs?->pronouns[$tokens[2]] ?? null;
+
+            return $isLocalizable($pronouns, $tokens[3] ?? null) ? ['/speakToAs/pronouns/'.$tokens[2], implode('/', \array_slice($tokens, 3))] : null;
+        }
+
+        $entries = $this->localizableEntries($card, $tokens[0]);
+        $entry = isset($tokens[1]) ? ($entries[$tokens[1]] ?? null) : null;
+        if (!$isLocalizable($entry, $tokens[2] ?? null)) {
+            return null;
+        }
+
+        if ($entry instanceof Address) {
+            $localizedAddress = $localized->addresses[$tokens[1]] ?? null;
+            if ($this->isGeographyOnly($entry) || null === $localizedAddress || $this->isGeographyOnly($localizedAddress)) {
+                return null;
+            }
+        }
+
+        return ['/'.$tokens[0].'/'.$tokens[1], implode('/', \array_slice($tokens, 2))];
+    }
+
+    /**
+     * The entries of a map whose properties have versions in other languages.
+     *
+     * @return array<array-key, object>
+     */
+    private function localizableEntries(Card $card, string $map): array
+    {
+        return match ($map) {
+            'nicknames' => $card->nicknames, 'organizations' => $card->organizations, 'titles' => $card->titles,
+            'emails' => $card->emails, 'phones' => $card->phones, 'addresses' => $card->addresses,
+            'onlineServices' => $card->onlineServices, 'links' => $card->links, 'notes' => $card->notes,
+            'personalInfo' => $card->personalInfo, 'media' => $card->media, 'directories' => $card->directories,
+            'calendars' => $card->calendars, 'cryptoKeys' => $card->cryptoKeys,
+            'schedulingAddresses' => $card->schedulingAddresses, 'preferredLanguages' => $card->preferredLanguages,
+            default => [],
+        };
+    }
+
+    /**
+     * The paths of the properties written for a localized property: the name converts to N
+     * and FN, its phonetics only to the phonetic N.
+     *
+     * @return list<string>
+     */
+    private function unitPaths(string $unit, bool $isPhonetic): array
+    {
+        return '/name' === $unit && !$isPhonetic ? ['/name', '/name/full'] : [$unit];
+    }
+
+    /**
+     * ALTID values for these paths: the one the name was read with, or the first number no
+     * property of the Card was read with.
+     *
+     * @param list<string> $paths
+     *
+     * @return array<string, string>
+     */
+    private function allocateAltIds(Card $card, array $paths): array
+    {
+        $used = [];
+        foreach ($this->objects($card) as $object) {
+            $altId = $object->vCardParams['altid'] ?? null;
+            if (\is_string($altId)) {
+                $used[] = $altId;
+            }
+        }
+
+        $nameAltId = $card->name?->vCardParams['altid'] ?? null;
+        $altIds = [];
+        $next = 1;
+        foreach ($paths as $path) {
+            if (\is_string($nameAltId) && \in_array($path, ['/name', '/name/full'], true)) {
+                $altIds[$path] = $nameAltId;
+                continue;
+            }
+
+            if ('/name/full' === $path && isset($altIds['/name'])) {
+                $altIds[$path] = $altIds['/name'];
+                continue;
+            }
+
+            while (\in_array((string) $next, $used, true)) {
+                ++$next;
+            }
+
+            $altIds[$path] = (string) $next++;
+        }
+
+        return $altIds;
+    }
+
+    /**
+     * @param list<string> $paths
+     *
+     * @return list<Property>
+     */
+    private function writtenAt(array $paths): array
+    {
+        $properties = [];
+        foreach ($this->written as [$path, $property]) {
+            if (\in_array($path, $paths, true)) {
+                $properties[] = $property;
+            }
+        }
+
+        return $properties;
+    }
+
+    /**
+     * The names of properties other than phonetic ones, which only some languages may have.
+     *
+     * @param list<Property> $properties
+     *
+     * @return list<string>
+     */
+    private function names(array $properties): array
+    {
+        $names = [];
+        foreach ($properties as $property) {
+            if (!isset($property['PHONETIC'])) {
+                $names[] = (string) $property->name;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * @param list<Issue> $issues
+     *
+     * @return list<string>
+     */
+    private function issuesAt(array $issues, string $path): array
+    {
+        $messages = [];
+        foreach ($issues as $issue) {
+            if ($issue->path === $path || str_starts_with($issue->path, $path.'/')) {
+                $messages[] = (string) $issue;
+            }
+        }
+
+        sort($messages);
+
+        return $messages;
+    }
+
+    /**
+     * Localizations vCard cannot hold, written as JSPROP: the whole map when none of them
+     * converted.
+     *
+     * @param array<string, PatchObject> $unwritten
+     */
+    private function unwrittenLocalizations(array $unwritten, int $count): void
+    {
+        foreach (array_keys($unwritten) as $language) {
+            $this->issues->add('/localizations/'.$this->escape($language), 'vCard cannot hold this localization, wrote it as JSPROP');
+        }
+
+        if ([] !== $unwritten && \count($unwritten) === $count) {
+            $this->jsProp('localizations', (object) array_map(static fn (PatchObject $patch): object => (object) $patch->patches, $unwritten));
+
+            return;
+        }
+
+        foreach ($unwritten as $language => $patch) {
+            $this->jsProp('localizations/'.$this->escape($language), (object) $patch->patches);
+        }
     }
 
     private function single(string $name, ?string $value, string $path): void
@@ -183,12 +524,12 @@ final class Exporter
 
         $group = \is_string($params['group'] ?? null) ? $params['group'] : null;
         if (null !== $name?->full) {
-            $this->add('FN', $name->full, $this->parameters($params), $group);
+            $this->add('FN', $name->full, $this->parameters($params), $group, '/name/full');
         } elseif ($hasComponents) {
             // RFC 9555, section 3.1: derive the full name and say so.
-            $this->add('FN', $this->fullName($name), ['DERIVED' => 'TRUE', ...$this->parameters($params)], $group);
+            $this->add('FN', $this->fullName($name), ['DERIVED' => 'TRUE', ...$this->parameters($params)], $group, '/name/full');
         } else {
-            $this->add('FN', '', $this->parameters($params), $group);
+            $this->add('FN', '', $this->parameters($params), $group, '/name/full');
         }
     }
 
@@ -239,22 +580,18 @@ final class Exporter
             $params['SORT-AS'] = rtrim(implode(',', \array_slice($sortAs, 0, $count)), ',');
         }
 
-        $hasPhonetics = null !== $name && (null !== $name->phoneticSystem || null !== $name->phoneticScript);
-        if ($hasPhonetics) {
-            $params['ALTID'] = \is_string($vCardParams['altid'] ?? null) ? $vCardParams['altid'] : '1';
-        }
+        $this->add('N', $this->structured($components), $params, $group, '/name');
 
-        $this->add('N', $this->structured($components), $params, $group);
-
-        if ($hasPhonetics) {
-            $phoneticParams = ['ALTID' => $params['ALTID'], 'PHONETIC' => $name->phoneticSystem ?? 'script'];
+        // The phonetic N shares the ALTID of the N, see add().
+        if (null !== $name && (null !== $name->phoneticSystem || null !== $name->phoneticScript)) {
+            $phoneticParams = ['PHONETIC' => $name->phoneticSystem ?? 'script'];
             if (null !== $name->phoneticScript) {
                 $phoneticParams['SCRIPT'] = $name->phoneticScript;
             }
 
             // Components without any phonetic value are left empty.
             $phonetics = array_map(static fn (array $values): array => [] === array_filter($values, static fn (string $value): bool => '' !== $value) ? [] : $values, $phonetics);
-            $this->add('N', $this->structured($phonetics), $phoneticParams);
+            $this->add('N', $this->structured($phonetics), $phoneticParams, path: '/name');
         }
     }
 
@@ -296,13 +633,10 @@ final class Exporter
             return;
         }
 
-        if (null !== $address->phoneticSystem || null !== $address->phoneticScript) {
-            $this->issues->add($path, 'phonetic addresses are not converted to vCard yet, left the phonetics out');
-        }
-
         $kinds = array_unique(array_map(static fn (\Rondeto\JSContact\Model\AddressComponent $component): string => $component->kind, $address->components));
         $isLegacy = VCardVersion::V30 === $this->version || [] === array_diff($kinds, ['separator', ...array_keys(self::LEGACY_ADDRESS_INDEXES)]);
         $components = array_fill(0, $isLegacy ? 7 : 18, []);
+        $phonetics = $components;
         $positions = [];
         $merged = false;
 
@@ -327,6 +661,7 @@ final class Exporter
 
             $positions[] = [$designated, \count($components[$designated])];
             $components[$designated][] = $component->value;
+            $phonetics[$designated][] = $component->phonetic ?? '';
         }
 
         if ($merged) {
@@ -360,6 +695,26 @@ final class Exporter
         }
 
         $this->entry('ADR', $this->structured($components), $key, $address->contexts, $address->pref, null, $address->vCardParams, $path, $params);
+
+        if (null === $address->phoneticSystem && null === $address->phoneticScript) {
+            return;
+        }
+
+        if ($merged) {
+            $this->issues->add($path, 'vCard 3.0 cannot relate phonetics to merged address components, left them out');
+
+            return;
+        }
+
+        // RFC 9555, section 2.3.15: a second ADR, which shares the ALTID of the first, see add().
+        $phoneticParams = ['PHONETIC' => $address->phoneticSystem ?? 'script'];
+        if (null !== $address->phoneticScript) {
+            $phoneticParams['SCRIPT'] = $address->phoneticScript;
+        }
+
+        // Components without any phonetic value are left empty.
+        $phonetics = array_map(static fn (array $values): array => [] === array_filter($values, static fn (string $value): bool => '' !== $value) ? [] : $values, $phonetics);
+        $this->add('ADR', $this->structured($phonetics), $phoneticParams, path: $path);
     }
 
     /**
@@ -959,10 +1314,6 @@ final class Exporter
     private function unknown(Card $card): void
     {
         foreach ($card->extra as $name => $value) {
-            if (\in_array($name, Registry::UNMODELED_CARD_PROPERTIES, true)) {
-                $this->issues->add('/'.$name, 'not converted to vCard properties yet, wrote it as JSPROP');
-            }
-
             $this->jsProp((string) $name, $value);
         }
 
@@ -1046,10 +1397,19 @@ final class Exporter
             $this->issues->add($path, \sprintf('vCard 3.0 does not define %s, wrote it anyway', $name));
         }
 
+        // Versions of a property in several languages share an ALTID (RFC 6350, section 5.4).
+        if (isset($this->altIds[$path])) {
+            $params['ALTID'] = $this->altIds[$path];
+            if (null !== $this->alternativeLanguage) {
+                $params['LANGUAGE'] = $this->alternativeLanguage;
+            }
+        }
+
         if ($raw && \is_string($value)) {
             $property = new RawProperty($this->vCard, $name, null, $params, $group);
             $property->setRawMimeDirValue($value);
             $this->vCard->add($property);
+            $this->written[] = [$path, $property];
 
             return;
         }
@@ -1063,7 +1423,28 @@ final class Exporter
             $raw = new RawProperty($this->vCard, $property->name ?? $name, null, $params, $group);
             $raw->setRawMimeDirValue($value);
             $this->vCard->add($raw);
+            $property = $raw;
         }
+
+        if ($property instanceof Property) {
+            $this->written[] = [$path, $property];
+        }
+    }
+
+    /**
+     * Adds a property written by the pass in another language.
+     */
+    private function copy(Property $property): void
+    {
+        $params = [];
+        foreach ($property->parameters() as $name => $parameter) {
+            $params[(string) $name] = $parameter->getParts();
+        }
+
+        $copy = new RawProperty($this->vCard, (string) $property->name, null, $params, $property->group);
+        $copy->setRawMimeDirValue($property->getRawMimeDirValue());
+
+        $this->vCard->add($copy);
     }
 
     /**
@@ -1085,11 +1466,20 @@ final class Exporter
         return $params;
     }
 
+    /**
+     * The objects of a Card that convert to vCard properties.
+     *
+     * @return list<object{vCardParams: array<string, string|list<string>>}>
+     */
+    private function objects(Card $card): array
+    {
+        return array_values(array_filter([$card->name, $card->speakToAs, ...$card->preferredLanguages, ...$card->relatedTo, ...$card->personalInfo, ...$card->media, ...$card->cryptoKeys, ...$card->directories, ...$card->calendars, ...$card->schedulingAddresses, ...$card->speakToAs->pronouns ?? [], ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes]));
+    }
+
     private function collectGroups(Card $card): void
     {
-        $objects = [$card->name, $card->speakToAs, ...$card->preferredLanguages, ...$card->relatedTo, ...$card->personalInfo, ...$card->media, ...$card->cryptoKeys, ...$card->directories, ...$card->calendars, ...$card->schedulingAddresses, ...$card->speakToAs->pronouns ?? [], ...$card->nicknames, ...$card->organizations, ...$card->titles, ...$card->anniversaries, ...$card->emails, ...$card->phones, ...$card->addresses, ...$card->onlineServices, ...$card->links, ...$card->notes];
-        foreach ($objects as $object) {
-            $group = $object?->vCardParams['group'] ?? null;
+        foreach ($this->objects($card) as $object) {
+            $group = $object->vCardParams['group'] ?? null;
             if (\is_string($group)) {
                 $this->groups[strtolower($group)] = true;
             }

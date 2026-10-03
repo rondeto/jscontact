@@ -42,6 +42,25 @@ final class Syntax
     {
     }
 
+    /**
+     * A language tag with the conventional case of RFC 5646 (section 2.1.1): "en",
+     * "zh-Hant", "de-AT".
+     */
+    public static function canonicalLanguageTag(string $tag): string
+    {
+        $subtags = explode('-', $tag);
+        foreach ($subtags as $index => $subtag) {
+            $subtags[$index] = match (true) {
+                0 === $index => strtolower($subtag),
+                4 === \strlen($subtag) && ctype_alpha($subtag) => ucfirst(strtolower($subtag)),
+                2 === \strlen($subtag) && ctype_alpha($subtag) => strtoupper($subtag),
+                default => strtolower($subtag),
+            };
+        }
+
+        return implode('-', $subtags);
+    }
+
     public static function isId(string $value): bool
     {
         return 1 === preg_match(self::ID, $value);

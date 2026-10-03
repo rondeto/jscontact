@@ -26,6 +26,7 @@ use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PatchObject;
 use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
@@ -144,13 +145,20 @@ final class Rfc9553TypedFiguresTest extends TestCase
         ), $this->figure(19)->name);
     }
 
-    public function testFigure20KeepsLocalizationsVerbatim(): void
+    public function testFigure20Localizations(): void
     {
         $card = $this->figure(20);
 
         self::assertSame('zh-Hant', $card->language);
         self::assertCount(4, $card->name->components ?? []);
-        self::assertSame(['localizations'], array_keys($card->extra));
+        self::assertEquals(['yue' => new PatchObject([
+            'name/phoneticSystem' => 'jyut',
+            'name/phoneticScript' => 'Latn',
+            'name/components/0/phonetic' => 'syun1',
+            'name/components/1/phonetic' => 'zung1saan1',
+            'name/components/2/phonetic' => 'man4',
+            'name/components/3/phonetic' => 'jat6sin1',
+        ])], $card->localizations);
     }
 
     public function testFigure21Nicknames(): void
@@ -244,7 +252,7 @@ final class Rfc9553TypedFiguresTest extends TestCase
 
         self::assertSame('2-7-2 Marunouchi, Chiyoda-ku, Tokyo 100-8994', $card->addresses['k26']->full ?? null);
         self::assertCount(9, $card->addresses['k26']->components ?? []);
-        self::assertSame(['localizations'], array_keys($card->extra));
+        self::assertSame(['addresses/k26'], array_keys($card->localizations['jp']->patches ?? []));
     }
 
     public function testFigures34To36KeysAndDirectories(): void

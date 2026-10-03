@@ -19,6 +19,7 @@ use Rondeto\JSContact\Model\Nickname;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\OrgUnit;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PatchObject;
 use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Pronouns;
 use Rondeto\JSContact\Model\Relation;
@@ -114,14 +115,14 @@ final class VCardDecoderTest extends TestCase
 
         self::assertSame('urn:uuid:1', $result->value->uid);
         self::assertSame('Boss', $result->value->titles['TITLE-1']->name ?? null);
-        self::assertSame(['uid', 'rev', 'kind', 'prodid', 'title'], array_map(static fn (VCardProperty $property): string => $property->name, $result->value->vCardProps));
+        self::assertEquals(['fr' => new PatchObject(['titles/TITLE-1/name' => 'Patron'])], $result->value->localizations);
+        self::assertSame(['uid', 'rev', 'kind', 'prodid'], array_map(static fn (VCardProperty $property): string => $property->name, $result->value->vCardProps));
         self::assertSame([
             '/: line 11 is not a vCard property, ignored it',
             '/vCardProps/0: kept UID verbatim: more than one UID property',
             '/vCardProps/1: kept REV verbatim: "yesterday" is not a valid REV value',
             '/vCardProps/2: kept KIND verbatim: "x-robot" is not a valid KIND value',
             '/vCardProps/3: kept PRODID verbatim: the Card has no place for its parameters or group',
-            '/vCardProps/4: kept TITLE verbatim: localized alternatives (ALTID with LANGUAGE) are not converted yet',
             '/: EMAIL: PROP-ID "a b" is not a valid or unique Id, generated another key',
             '/emails/EMAIL-1: PREF "0" is not between 1 and 100, ignored it',
         ], array_map(strval(...), $result->issues));
@@ -203,7 +204,9 @@ final class VCardDecoderTest extends TestCase
             ['PRONOUNS-1' => new Pronouns('she/her', ['work'], vCardParams: ['language' => 'en'])],
             vCardParams: ['language' => 'de'],
         ), $result->value->speakToAs);
-        self::assertSame(['/vCardProps/0: kept GRAMGENDER verbatim: grammatical genders in other languages are not converted yet'], array_map(strval(...), $result->issues));
+        // A Card has one grammatical gender: the others are its versions in other languages.
+        self::assertEquals(['fr' => new PatchObject(['speakToAs/grammaticalGender' => 'masculine'])], $result->value->localizations);
+        self::assertSame([], array_map(strval(...), $result->issues));
     }
 
     public function testVersion3MediaAreEmbeddedOrTyped(): void
@@ -326,7 +329,7 @@ final class VCardDecoderTest extends TestCase
         $result = $this->decode("JSPROP;JSPTR=\"emails/e1/x\":1\r\n");
 
         self::assertSame(['jsprop'], array_map(static fn (VCardProperty $property): string => $property->name, $result->value->vCardProps));
-        self::assertSame(['/: kept the JSPROP properties verbatim: the parent of "emails/e1/x" does not exist, or is not an object'], array_map(strval(...), $result->issues));
+        self::assertSame(['/: kept the JSPROP properties verbatim: "emails/e1/x" points into a value that does not exist'], array_map(strval(...), $result->issues));
     }
 
     public function testStrictModeRefusesAVCardWithIssues(): void
@@ -342,6 +345,49 @@ final class VCardDecoderTest extends TestCase
         self::assertInstanceOf(VCard::class, $vCard);
 
         self::assertEquals(new Card(uid: 'urn:uuid:1'), new VCardDecoder()->convert($vCard)->value);
+    }
+
+    public function testVersionsInTheSameLanguageAreKeptVerbatim(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'TITLE;ALTID=1:Boss',
+            'TITLE;ALTID=1;LANGUAGE=fr:Patron',
+            'TITLE;ALTID=1;LANGUAGE=fr:Chef',
+            '',
+        ]));
+
+        self::assertEquals(['fr' => new PatchObject(['titles/TITLE-1/name' => 'Patron'])], $result->value->localizations);
+        self::assertSame(['/vCardProps/0: kept TITLE verbatim: another version in the same language'], array_map(strval(...), $result->issues));
+    }
+
+    public function testAPhoneticAddressWithoutItsAddressIsKeptVerbatim(): void
+    {
+        $result = $this->decode("ADR;ALTID=1:;;;香港;;;\r\nADR;ALTID=2;PHONETIC=jyut:;;;hoeng1gong2;;;\r\n");
+
+        self::assertNull($result->value->addresses['ADR-1']->phoneticSystem ?? null);
+        self::assertSame(['/vCardProps/0: kept ADR verbatim: no ADR property relates to it by ALTID'], array_map(strval(...), $result->issues));
+    }
+
+    public function testJsPropIntoTheLocalizationsAppliesOnceTheyAreConverted(): void
+    {
+        $result = $this->decode(implode("\r\n", [
+            'TITLE;ALTID=1:Boss',
+            'TITLE;ALTID=1;LANGUAGE=fr:Patron',
+            'JSPROP;JSPTR=localizations/de:{"titles/TITLE-1/name":"Chef"}',
+            '',
+        ]));
+
+        self::assertEquals([
+            'fr' => new PatchObject(['titles/TITLE-1/name' => 'Patron']),
+            'de' => new PatchObject(['titles/TITLE-1/name' => 'Chef']),
+        ], $result->value->localizations);
+        self::assertSame([], array_map(strval(...), $result->issues));
+
+        $result = $this->decode('JSPROP;JSPTR=localizations/de/x:1'."\r\n");
+
+        self::assertSame([], $result->value->localizations);
+        self::assertSame('jsprop', $result->value->vCardProps[0]->name ?? null);
+        self::assertSame(['/: kept the JSPROP properties verbatim: "localizations/de/x" points into a value that does not exist'], array_map(strval(...), $result->issues));
     }
 
     /**

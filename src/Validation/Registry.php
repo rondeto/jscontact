@@ -15,9 +15,7 @@ final class Registry
      * Card properties that are registered but not modeled yet: they are kept verbatim in
      * Card::$extra.
      */
-    public const array UNMODELED_CARD_PROPERTIES = [
-        'localizations',
-    ];
+    public const array UNMODELED_CARD_PROPERTIES = [];
 
     /**
      * Registered properties that every object type may hold but that are not modeled yet.

@@ -24,6 +24,7 @@ use Rondeto\JSContact\Model\Note;
 use Rondeto\JSContact\Model\OnlineService;
 use Rondeto\JSContact\Model\Organization;
 use Rondeto\JSContact\Model\PartialDate;
+use Rondeto\JSContact\Model\PatchObject;
 use Rondeto\JSContact\Model\PersonalInfo;
 use Rondeto\JSContact\Model\Phone;
 use Rondeto\JSContact\Model\Pronouns;
@@ -166,9 +167,33 @@ final class CardValidatorTest extends TestCase
                 '/personalInfo/p1/listAs: must be greater than 0',
             ],
         ];
+        yield 'localizations' => [
+            new Card(
+                name: new Name([new NameComponent('given', 'Jane')], isOrdered: true),
+                emails: ['e1' => new EmailAddress('a@example.com')],
+                localizations: [
+                    'not a tag' => new PatchObject([]),
+                    'fr' => new PatchObject(['localizations/de' => []]),
+                    'de' => new PatchObject(['name/components/-' => []]),
+                    'es' => new PatchObject(['name/components/1/value' => 'Juana']),
+                    'it' => new PatchObject(['name/components/0' => null]),
+                    'nl' => new PatchObject(['name' => ['full' => 'Jane'], 'name/full' => 'Jane']),
+                    'pt' => new PatchObject(['emails/e1/pref' => 0]),
+                ],
+            ),
+            [
+                '/localizations/not a tag: not a language tag',
+                '/localizations/fr/localizations~1de: a localization cannot patch localizations',
+                '/localizations/de: "name/components/-" is not a valid path',
+                '/localizations/es: "name/components/1/value" points into a value that does not exist',
+                '/localizations/it: "name/components/0" cannot remove an array element',
+                '/localizations/nl: "name" is a prefix of "name/full"',
+                '/localizations/pt/emails~1e1~1pref: gives an invalid Card: /emails/e1/pref: expected an integer from 1 to 100, ignored the value',
+            ],
+        ];
         yield 'extra' => [
-            new Card(extra: ['uid' => 'x', 'Localizations' => [], 'extra' => 1, 'bad name' => 1, 'localizations' => [], 'example.com:x' => 1]),
-            ['/uid: this property is modeled: set it on the object, not in extra', '/Localizations: must be written "localizations"', '/extra: "extra" is a reserved property name', '/bad name: not a valid property name'],
+            new Card(extra: ['uid' => 'x', 'Localizations' => [], 'extra' => 1, 'bad name' => 1, 'example.com:x' => 1]),
+            ['/uid: this property is modeled: set it on the object, not in extra', '/Localizations: this property is modeled: set it on the object, not in extra', '/extra: "extra" is a reserved property name', '/bad name: not a valid property name'],
         ];
         yield 'nested extra' => [
             new Card(emails: ['e1' => new EmailAddress('a@example.com', extra: ['Label' => 'x', 'example.com:x' => []])]),
