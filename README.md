@@ -124,6 +124,10 @@ vendor properties are kept verbatim in `vCardProps`.
 | Dialect | Reads and writes                                                                                     |
 |---------|------------------------------------------------------------------------------------------------------|
 | `Apple` | The properties Apple's Address Book introduced, which other address books, such as Google Contacts, also export: `X-ABRELATEDNAMES`, `X-ABDATE`, `X-ABADR`, `X-SOCIALPROFILE`, `X-ABShowAs`, `X-ADDRESSBOOKSERVER-KIND`/`-MEMBER`, built-in labels such as `_$!<HomePage>!$_`, and dates of year 1604, Apple's "no year" |
+| `LegacyMessaging` | The instant messaging properties written before IMPP: `X-AIM`, `X-ICQ`, `X-JABBER`, `X-MSN`, `X-YAHOO`, `X-SKYPE`, `X-QQ`, `X-GOOGLE-TALK`… (Android, Google, Evolution, KDE, Apple) |
+
+Pass the same list to both: the encoder applies dialects in reverse order, so that `[new Apple(), new LegacyMessaging()]`
+works both ways.
 
 ### Localizations
 

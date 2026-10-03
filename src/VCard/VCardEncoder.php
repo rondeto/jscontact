@@ -23,7 +23,8 @@ use Sabre\VObject\Component\VCard;
  * Pass validate: false to write it anyway.
  *
  * Dialects then rewrite RFC properties as the vendor properties they stand for, in the
- * order given.
+ * reverse order of the list: the one VCardDecoder applies first applies last, so that the
+ * same list works both ways.
  */
 final readonly class VCardEncoder
 {
@@ -68,7 +69,7 @@ final readonly class VCardEncoder
         }
 
         $dialectIssues = [];
-        foreach ($this->dialects as $dialect) {
+        foreach (array_reverse($this->dialects) as $dialect) {
             array_push($dialectIssues, ...$dialect->write($result->value));
         }
 
