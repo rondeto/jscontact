@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\VCard\Internal;
 
+use Rondeto\JSContact\Conversion\Issue;
 use Rondeto\JSContact\Conversion\IssueCollector;
 use Rondeto\JSContact\Conversion\Result;
 use Rondeto\JSContact\Json\JsonDecoder;
 use Rondeto\JSContact\Json\JsonEncoder;
+use Rondeto\JSContact\Localization\Internal\Diff;
+use Rondeto\JSContact\Localization\Internal\Patch;
 use Rondeto\JSContact\Model\Address;
 use Rondeto\JSContact\Model\AddressComponent;
 use Rondeto\JSContact\Model\Anniversary;
@@ -112,8 +115,10 @@ final class Importer
 
     private readonly KeyAllocator $keys;
 
-    /** @var array<int, string> Raw values of N, ADR and unknown properties, by object id */
+    /** @var array<int, string> Raw values of N, ADR and unknown properties, by object id of the sabre property */
     private array $raw = [];
+
+    private ?LocalizationPlan $plan = null;
 
     /** @var array<string, PropertyReader> X-ABLabel properties not used yet, by group */
     private array $labels = [];
@@ -222,6 +227,9 @@ final class Importer
     /** @var list<PropertyReader> */
     private array $phonetics = [];
 
+    /** @var array<int, PropertyReader> Phonetic ADR properties not related to an address yet */
+    private array $addressPhonetics = [];
+
     /** @var list<PropertyReader> */
     private array $jsProps = [];
 
@@ -243,20 +251,109 @@ final class Importer
      */
     public function import(VCard $vCard, array $parseIssues = []): Result
     {
+        $properties = [];
+        $localizationJsProps = [];
+        foreach ($vCard->children() as $property) {
+            if (!$property instanceof Property) {
+                continue;
+            }
+
+            // JSPROP properties into the localizations apply once those are converted.
+            $pointer = 'JSPROP' === $property->name ? new PropertyReader($property)->peek('JSPTR') : null;
+            if (null !== $pointer && 'localizations' === (Patch::tokens(ltrim($pointer, '/')) ?? [''])[0]) {
+                $localizationJsProps[] = $property;
+            } else {
+                $properties[] = $property;
+            }
+        }
+
+        $this->matchRawValues([...$properties, ...$localizationJsProps]);
+        $this->plan = LocalizationPlan::of($properties);
+
+        $result = $this->convert($this->plan->main, $parseIssues);
+        if ([] === $this->plan->languages && [] === $localizationJsProps) {
+            return $result;
+        }
+
+        // Each language converts on its own; its differences with the Card are its localization.
+        $encoder = new JsonEncoder(validate: false);
+        $json = $encoder->normalize($result->value);
+        $localizations = new \stdClass();
+        foreach ($this->plan->languages as $language => $localizedProperties) {
+            $pass = new self($this->rawValues, $this->validator);
+            $pass->raw = $this->raw;
+            $pass->plan = $this->plan;
+            $localized = $encoder->normalize($pass->convert($localizedProperties)->value);
+            $patches = Diff::between($json, $localized, ['@type', 'version', 'language', 'localizations', 'vCardProps']);
+            // The parameters of the versions, such as their LANGUAGE, are not localized values.
+            $patches = array_filter($patches, static fn (string|int $path): bool => !\in_array('vCardParams', Patch::tokens((string) $path) ?? [], true), \ARRAY_FILTER_USE_KEY);
+            if ([] !== $patches) {
+                $localizations->{$language} = (object) $patches;
+            }
+        }
+
+        if ([] !== get_object_vars($localizations)) {
+            $json->localizations = $localizations;
+        }
+
+        $issues = [];
+        if ([] !== $localizationJsProps) {
+            $this->jsProps = array_map(static fn (Property $property): PropertyReader => new PropertyReader($property), $localizationJsProps);
+            $error = $this->applyJsProps($json);
+            if (null !== $error) {
+                $verbatim = array_map(fn (PropertyReader $jsProp): VCardProperty => $jsProp->toVCardProperty($this->rawValue($jsProp)), $this->jsProps);
+                $json->vCardProps = $encoder->normalize(new Card(vCardProps: [...$result->value->vCardProps, ...$verbatim]))->vCardProps;
+                $issues[] = new Issue('', 'kept the JSPROP properties verbatim: '.$error);
+            }
+        }
+
+        if (!isset($json->localizations) && [] === $issues) {
+            return $result;
+        }
+
+        $card = new JsonDecoder(validator: $this->validator)->decode(json_encode($json, \JSON_THROW_ON_ERROR));
+        $localizationIssues = array_filter($card->issues, static fn (Issue $issue): bool => str_starts_with($issue->path, '/localizations'));
+
+        return new Result($card->value, [...$result->issues, ...$issues, ...array_values($localizationIssues)]);
+    }
+
+    /**
+     * Converts properties to a Card: the main ones, or those of a language.
+     *
+     * @param list<Property> $sabreProperties
+     * @param list<string>   $parseIssues
+     *
+     * @return Result<Card>
+     */
+    private function convert(array $sabreProperties, array $parseIssues = []): Result
+    {
         foreach ($parseIssues as $issue) {
             $this->issues->add('', $issue);
         }
 
         $properties = [];
-        foreach ($vCard->children() as $property) {
-            if ($property instanceof Property) {
-                $properties[] = new PropertyReader($property);
+        foreach ($sabreProperties as $property) {
+            $reader = new PropertyReader($property);
+            // ALTID and LANGUAGE convert to the localizations, LANGUAGE also to the Card's language.
+            if (isset($this->plan->groupedAltIds[spl_object_id($property)])) {
+                $reader->parameter('ALTID');
+            }
+
+            $tag = $reader->peek('LANGUAGE');
+            if (isset($this->plan->alternatives[spl_object_id($property)]) || (null !== $tag && null !== $this->plan?->language && Syntax::canonicalLanguageTag($tag) === $this->plan->language)) {
+                $reader->parameter('LANGUAGE');
+            }
+
+            $properties[] = $reader;
+        }
+
+        $this->collectLabels($properties);
+        foreach ($properties as $property) {
+            if ('ADR' === $property->name && $property->has('PHONETIC')) {
+                $this->addressPhonetics[] = $property;
             }
         }
 
-        $alternatives = $this->alternatives($properties);
-        $this->matchRawValues($properties);
-        $this->collectLabels($properties);
         foreach ($properties as $property) {
             $this->hasGeographyGroups = $this->hasGeographyGroups || (null !== $property->group && \in_array($property->name, ['ADR', 'GEO', 'TZ'], true));
             $propId = $property->peek('PROP-ID');
@@ -268,10 +365,12 @@ final class Importer
         }
 
         foreach ($properties as $property) {
-            if (\in_array($property, $alternatives, true)) {
-                $this->raw($property, 'localized alternatives (ALTID with LANGUAGE) are not converted yet');
-            } else {
-                $this->property($property);
+            $this->property($property);
+        }
+
+        if ($sabreProperties === $this->plan?->main) {
+            foreach ($this->plan->duplicates as $duplicate) {
+                $this->raw(new PropertyReader($duplicate), 'another version in the same language');
             }
         }
 
@@ -283,13 +382,17 @@ final class Importer
             $this->raw($label); // No entry of its group has a label property.
         }
 
+        foreach ($this->addressPhonetics as $phonetic) {
+            $this->raw($phonetic, 'no ADR property relates to it by ALTID');
+        }
+
         $card = new Card(
             uid: $this->uid,
             prodId: $this->prodId,
             created: $this->created,
             updated: $this->updated,
             kind: $this->kind,
-            language: $this->language,
+            language: $this->language ?? $this->plan?->language,
             members: $this->members,
             name: $name,
             speakToAs: $this->speakToAs(),
@@ -358,55 +461,27 @@ final class Importer
     }
 
     /**
-     * Properties that are localized alternatives of another one: same name and ALTID
-     * (RFC 9555, section 2.3.11). They convert to localizations, which are not modeled
-     * yet, so all but the first are kept verbatim.
-     *
-     * @param list<PropertyReader> $properties
-     *
-     * @return list<PropertyReader>
-     */
-    private function alternatives(array $properties): array
-    {
-        $seen = [];
-        $alternatives = [];
-        foreach ($properties as $property) {
-            $altId = $property->peek('ALTID');
-            if (null === $altId || $property->has('PHONETIC')) {
-                continue;
-            }
-
-            if (isset($seen[$property->name][$altId])) {
-                $alternatives[] = $property;
-            }
-
-            $seen[$property->name][$altId] = true;
-        }
-
-        return $alternatives;
-    }
-
-    /**
      * sabre/vobject workaround: see Parser for why raw values are needed.
      *
      * Pairs properties with their raw values, checking each pair: should sabre have dropped
      * a line the Parser kept, the values would not match. Only N, ADR and unknown
      * properties need them.
      *
-     * @param list<PropertyReader> $properties
+     * @param list<Property> $properties
      */
     private function matchRawValues(array $properties): void
     {
         $positions = [];
         foreach ($properties as $property) {
-            $position = $positions[$property->name] = ($positions[$property->name] ?? -1) + 1;
-            $raw = $this->rawValues[$property->name][$position] ?? null;
-            $isStructured = \in_array($property->name, ['N', 'ADR'], true);
-            if (null === $raw || (!$isStructured && !$property->property instanceof Unknown)) {
+            $name = strtoupper($property->name ?? '');
+            $position = $positions[$name] = ($positions[$name] ?? -1) + 1;
+            $raw = $this->rawValues[$name][$position] ?? null;
+            $isStructured = \in_array($name, ['N', 'ADR'], true);
+            if (null === $raw || (!$isStructured && !$property instanceof Unknown)) {
                 continue;
             }
 
-            $parts = implode(';', array_map(static fn (mixed $part): string => \is_string($part) ? $part : '', array_values($property->property->getParts())));
+            $parts = implode(';', array_map(static fn (mixed $part): string => \is_string($part) ? $part : '', array_values($property->getParts())));
             $matches = $isStructured
                 ? $parts === implode(';', array_map(static fn (array $values): string => implode(',', $values), VCardText::splitStructured($raw)))
                 // sabre unescapes unknown values, but splits quoted-printable ones on ";".
@@ -527,13 +602,12 @@ final class Importer
     private function address(PropertyReader $property): void
     {
         if ($property->has('PHONETIC')) {
-            $this->raw($property, 'phonetic addresses are not converted yet');
-
-            return;
+            return; // Collected beforehand, see addressPhonetic().
         }
 
         $structured = $property->structured($this->rawValue($property));
         [$components, $isOrdered, $defaultSeparator] = $this->ordered($property, Components::fromAddress($structured), $structured, Components::ADDRESS_KINDS, '/addresses');
+        [$phonetics, $phoneticSystem, $phoneticScript] = $this->addressPhonetic($property, $components);
         $label = $property->parameter('LABEL');
         $coordinates = $property->parameter('GEO');
         $timeZone = $property->parameter('TZ');
@@ -547,7 +621,11 @@ final class Importer
 
         $common = $this->common($property);
         $this->addresses[$common->key] = new Address(
-            components: array_map(static fn (array $component): AddressComponent => new AddressComponent($component['kind'], $component['value']), $components),
+            components: array_map(
+                static fn (array $component, int $index): AddressComponent => new AddressComponent($component['kind'], $component['value'], $phonetics[$index] ?? null),
+                $components,
+                array_keys($components),
+            ),
             isOrdered: $isOrdered,
             countryCode: $countryCode,
             coordinates: $coordinates,
@@ -556,9 +634,51 @@ final class Importer
             full: null === $label ? null : str_replace(['\n', '\N'], "\n", $label),
             defaultSeparator: $defaultSeparator,
             pref: $common->pref,
+            phoneticScript: $phoneticScript,
+            phoneticSystem: $phoneticSystem,
             vCardName: $common->vCardName,
             vCardParams: $common->vCardParams,
         );
+    }
+
+    /**
+     * Reads the phonetic ADR property related to an address by ALTID (RFC 9555, section
+     * 2.3.15), as phonetic() does for N.
+     *
+     * @param list<array{kind: string, value: string, position: array{int, int}|null}> $components
+     *
+     * @return array{array<int, string>, string|null, string|null} Phonetic value of each component, phoneticSystem, phoneticScript
+     */
+    private function addressPhonetic(PropertyReader $address, array $components): array
+    {
+        $altId = $address->peek('ALTID');
+        foreach ($this->addressPhonetics as $index => $phonetic) {
+            if (null === $altId || $altId !== $phonetic->peek('ALTID')) {
+                continue;
+            }
+
+            unset($this->addressPhonetics[$index]);
+            $address->parameter('ALTID');
+            $phonetic->parameter('ALTID');
+
+            $values = $phonetic->structured($this->rawValue($phonetic));
+            $phonetics = [];
+            foreach ($components as $componentIndex => $component) {
+                $value = null === $component['position'] ? null : ($values[$component['position'][0]][$component['position'][1]] ?? null);
+                if (null !== $value && '' !== $value) {
+                    $phonetics[$componentIndex] = $value;
+                }
+            }
+
+            $system = strtolower($phonetic->parameter('PHONETIC') ?? '');
+            if ([] !== $phonetic->unreadParameters()) {
+                $this->issues->add('/addresses', \sprintf('ignored the parameters %s of the phonetic ADR property', implode(', ', $phonetic->unreadParameterNames())));
+            }
+
+            return [$phonetics, 'script' === $system ? null : $system, $phonetic->parameter('SCRIPT')];
+        }
+
+        return [[], null, null];
     }
 
     private function onlineService(PropertyReader $property): void
@@ -958,15 +1078,14 @@ final class Importer
     }
 
     /**
-     * GRAMGENDER converts to the grammatical gender (RFC 9555, section 2.5.4). Several of them
-     * are versions in different languages, which convert to localizations: they are not
-     * converted yet.
+     * GRAMGENDER converts to the grammatical gender (RFC 9555, section 2.5.4). Its versions in
+     * other languages convert to localizations, see LocalizationPlan.
      */
     private function grammaticalGender(PropertyReader $property): void
     {
         $value = strtolower(trim($property->text()));
         if (null !== $this->grammaticalGender) {
-            $this->raw($property, 'grammatical genders in other languages are not converted yet');
+            $this->raw($property, 'more than one GRAMGENDER property');
         } elseif (1 !== preg_match('/^[a-z0-9-]+$/', $value) || str_starts_with($value, 'x-')) {
             $this->raw($property, \sprintf('"%s" is not a valid GRAMGENDER value', $value));
         } else {
@@ -1302,8 +1421,8 @@ final class Importer
         $found = false;
         foreach ($this->phonetics as $phonetic) {
             $isRelated = null !== $altId && $altId === $phonetic->peek('ALTID');
-            if (!$isRelated || $found || $phonetic->has('LANGUAGE')) {
-                $this->raw($phonetic, $isRelated ? 'phonetic names in another language are not converted yet' : 'no N property relates to it by ALTID');
+            if (!$isRelated || $found) {
+                $this->raw($phonetic, $isRelated ? 'another phonetic version of the name' : 'no N property relates to it by ALTID');
                 continue;
             }
 
@@ -1338,27 +1457,8 @@ final class Importer
      */
     private function patch(Card $card): Result
     {
-        $patches = [];
-        $error = null;
-        foreach ($this->jsProps as $jsProp) {
-            $pointer = $jsProp->parameter('JSPTR');
-            try {
-                $value = json_decode($jsProp->text(), false, 512, \JSON_THROW_ON_ERROR);
-            } catch (\JsonException) {
-                $error ??= \sprintf('the value of JSPROP "%s" is not JSON', $pointer);
-                continue;
-            }
-
-            if (null === $pointer || \array_key_exists($pointer, $patches)) {
-                $error ??= 'a JSPROP property has no JSPTR parameter, or a repeated one';
-                continue;
-            }
-
-            $patches[$pointer] = $value;
-        }
-
         $json = new JsonEncoder(validate: false)->normalize($card);
-        $error ??= Patch::apply($json, $patches);
+        $error = $this->applyJsProps($json);
         if (null !== $error) {
             foreach ($this->jsProps as $jsProp) {
                 $this->raw($jsProp);
@@ -1386,6 +1486,35 @@ final class Importer
         return new Result($result->value, [...$this->issues->all(), ...$result->issues]);
     }
 
+    /**
+     * Applies the JSPROP properties to the JSON form of a Card, all or none.
+     *
+     * @return string|null Why they could not be applied, or null once they are
+     */
+    private function applyJsProps(\stdClass $json): ?string
+    {
+        $patches = [];
+        $error = null;
+        foreach ($this->jsProps as $jsProp) {
+            $pointer = $jsProp->parameter('JSPTR');
+            try {
+                $value = json_decode($jsProp->text(), false, 512, \JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                $error ??= \sprintf('the value of JSPROP "%s" is not JSON', $pointer);
+                continue;
+            }
+
+            if (null === $pointer || \array_key_exists($pointer, $patches)) {
+                $error ??= 'a JSPROP property has no JSPTR parameter, or a repeated one';
+                continue;
+            }
+
+            $patches[$pointer] = $value;
+        }
+
+        return $error ?? Patch::apply($json, $patches, intoArrays: false, leadingSlash: true);
+    }
+
     private function raw(PropertyReader $property, ?string $reason = null): void
     {
         // It still takes its position, so that the keys of the next properties do not depend
@@ -1403,6 +1532,6 @@ final class Importer
 
     private function rawValue(PropertyReader $property): ?string
     {
-        return $this->raw[spl_object_id($property)] ?? null;
+        return $this->raw[spl_object_id($property->property)] ?? null;
     }
 }

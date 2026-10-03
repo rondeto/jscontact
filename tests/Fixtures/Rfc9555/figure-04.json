@@ -1,0 +1,15 @@
+{
+  "name": {
+    "full": "John Doe"
+  },
+  "titles": {
+    "TITLE-1": {
+      "kind": "title", "name": "Boss"
+    }
+  },
+  "localizations": {
+    "fr": {
+      "titles/TITLE-1/name": "Patron"
+    }
+  }
+}

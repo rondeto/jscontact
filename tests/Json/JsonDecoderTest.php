@@ -183,14 +183,14 @@ final class JsonDecoderTest extends TestCase
         $result = $this->decode([
             'futureProperty' => ['a' => 1],
             'example.com:flag' => true,
-            'localizations' => ['fr' => ['name/full' => 'ACME']],
+            'example.com:map' => ['fr' => ['name/full' => 'ACME']],
             'emails' => ['e1' => ['address' => 'a@example.com', 'example.com:verified' => true]],
         ]);
 
         self::assertEquals([
             'futureProperty' => (object) ['a' => 1],
             'example.com:flag' => true,
-            'localizations' => (object) ['fr' => (object) ['name/full' => 'ACME']],
+            'example.com:map' => (object) ['fr' => (object) ['name/full' => 'ACME']],
         ], $result->value->extra);
         self::assertSame(['example.com:verified' => true], $result->value->emails['e1']->extra ?? null);
         self::assertSame([], $result->issues);

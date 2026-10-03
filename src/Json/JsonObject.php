@@ -313,6 +313,38 @@ final class JsonObject
     }
 
     /**
+     * A String[String[*]] map, such as localizations: objects of JSON values, by any
+     * non-empty key.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function rawObjectMap(string $name): array
+    {
+        $map = [];
+        foreach ($this->objectMap($name, false) as $key => $object) {
+            $map[(string) $key] = $object->all();
+        }
+
+        return $map;
+    }
+
+    /**
+     * Every property, as JSON values.
+     *
+     * @return array<string, mixed>
+     */
+    public function all(): array
+    {
+        $all = [];
+        foreach (get_object_vars($this->data) as $name => $value) {
+            $this->read[(string) $name] = true;
+            $all[(string) $name] = $value;
+        }
+
+        return $all;
+    }
+
+    /**
      * The vCardParams property (RFC 9555, section 2.15.2).
      *
      * @return array<string, string|list<string>>

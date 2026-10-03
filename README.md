@@ -50,16 +50,16 @@ contact data, and for converting between vCard and JSContact.
 | Media, keys, directories, calendars              | ✅ Done     |
 | Languages, relations, personal information       | ✅ Done     |
 | Card-level GEO and TZ                            | ✅ Done     |
-| Localizations (LANGUAGE and ALTID alternatives)  | ⏳ Planned  |
+| Localizations (LANGUAGE and ALTID alternatives)  | ✅ Done     |
 
 Typed properties: `uid`, `prodId`, `created`, `updated`, `kind`, `language`, `members`, `name`, `speakToAs`, `nicknames`,
 `organizations`, `titles`, `emails`, `phones`, `addresses`, `onlineServices`, `links`, `media`, `cryptoKeys`,
 `directories`, `calendars`, `schedulingAddresses`, `preferredLanguages`, `relatedTo`, `notes`, `anniversaries`,
-`personalInfo`, `keywords`, and
+`personalInfo`, `keywords`, `localizations`, and
 the RFC 9555 properties `vCardName`, `vCardParams` and `vCardProps`.
 
 Properties that are not modeled yet are kept verbatim in the `extra` array of their object, and written
-back unchanged. vCard properties that are not converted yet (localized alternatives…) and vendor extensions are
+back unchanged. vCard properties that cannot be converted and vendor extensions are
 kept verbatim in `vCardProps`, as RFC 9555 allows, and written back unchanged.
 
 ## Usage
@@ -111,6 +111,22 @@ file_put_contents('contact.vcf', $result->value);
 Map keys come from the vCard `PROP-ID` parameter, or are named after the property otherwise (`EMAIL-1`,
 `PHONE-2`…); writing a Card to vCard sets `PROP-ID`, so keys survive a round trip. Labels convert to and from
 `X-ABLabel`, as RFC 9555 specifies.
+
+Versions of a property in other languages (same `ALTID`, another `LANGUAGE`) convert to `localizations`, and
+back. A localization vCard cannot hold, such as a localized label, is written as a `JSPROP` property instead,
+and reported.
+
+### Localizations
+
+```php
+use Rondeto\JSContact\Localization\Localizer;
+
+// The Card in French: its "fr" localization applied, or the Card itself without one.
+$french = (new Localizer())->localize($card, 'fr')->value;
+
+// The localization that turns a Card into a localized version of it.
+$patch = (new Localizer())->localization($card, $french);
+```
 
 ## Contributing
 

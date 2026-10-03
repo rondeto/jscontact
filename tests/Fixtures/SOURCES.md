@@ -32,8 +32,10 @@ Copyright (c) 2024 IETF Trust and the persons identified as the document authors
 Changes:
 
 - Folded lines are folded with a single space, as RFC 6350 requires; the RFC indents them further for readability.
-- Map keys follow this library's naming (`PHONE-1`, `EMAIL-1`, `OS-1`) where the figure uses other ones: `p1` in
-  Figures 1 and 40, `email1` in Figure 46, `os1` in Figure 47. RFC 9555 leaves the choice of keys to implementations.
+- Map keys follow this library's naming (`PHONE-1`, `EMAIL-1`, `OS-1`, `TITLE-1`) where the figure uses other ones:
+  `p1` in Figures 1 and 40, `t1` in Figures 3 and 4, `email1` in Figure 46, `os1` in Figure 47. RFC 9555 leaves the
+  choice of keys to implementations.
+- Figures 3 and 4: the title has `"kind": "title"`, as TITLE converts to in section 2.9.6 (Figure 27).
 - Figure 9: the death date has `"day": 15` where the figure repeats `"year"` (the vCard says `DEATHDATE:19960415`).
 - Figure 15: the address components are in the order of the ADR value, which section 2.6.1 requires; the figure lists
   the street number and name first.
