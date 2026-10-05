@@ -582,12 +582,24 @@ final class Importer
 
     private function email(PropertyReader $property): void
     {
+        if ('' === trim($property->text())) {
+            $this->raw($property, 'empty value');
+
+            return;
+        }
+
         $common = $this->common($property);
         $this->emails[$common->key] = new EmailAddress($property->text(), $common->contexts, $common->pref, $common->label, $common->vCardName, $common->vCardParams);
     }
 
     private function phone(PropertyReader $property): void
     {
+        if ('' === trim($property->text())) {
+            $this->raw($property, 'empty value');
+
+            return;
+        }
+
         $features = [];
         foreach (self::PHONE_FEATURES as $type => $feature) {
             if ($property->takeType($type)) {
