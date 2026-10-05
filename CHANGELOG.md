@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-05
+
 ### Fixed
 
 - `VCardDecoder` no longer turns an empty `EMAIL` or `TEL` (`EMAIL;TYPE=HOME:`, written by Nextcloud
@@ -82,7 +84,8 @@ First release.
 - Some sabre/vobject behaviors are worked around, see the `sabre/vobject workaround:` comments. The
   workarounds go once sabre/vobject 5 ships the fixes.
 
-[Unreleased]: https://github.com/rondeto/jscontact/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/rondeto/jscontact/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/rondeto/jscontact/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/rondeto/jscontact/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rondeto/jscontact/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rondeto/jscontact/releases/tag/v0.1.0
