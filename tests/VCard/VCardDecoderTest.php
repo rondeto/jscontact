@@ -338,6 +338,17 @@ final class VCardDecoderTest extends TestCase
         self::assertSame(['/: line 3 repeats the VALUE parameter, kept the first one'], array_map(strval(...), $result->issues));
     }
 
+    public function testAnEmptyEmailOrPhoneIsKeptVerbatim(): void
+    {
+        $result = $this->decode("EMAIL;TYPE=HOME:\r\nTEL;TYPE=HOME,VOICE: \r\nEMAIL:jane@example.com\r\n");
+
+        self::assertSame(['EMAIL-2'], array_keys($result->value->emails));
+        self::assertSame('jane@example.com', $result->value->emails['EMAIL-2']->address);
+        self::assertSame([], $result->value->phones);
+        self::assertSame(['email', 'tel'], array_map(static fn (VCardProperty $property): string => $property->name, $result->value->vCardProps));
+        self::assertSame(['/vCardProps/0: kept EMAIL verbatim: empty value', '/vCardProps/1: kept TEL verbatim: empty value'], array_map(strval(...), $result->issues));
+    }
+
     public function testADerivedFullNameIsNotKept(): void
     {
         $card = $this->decode("N:Doe;Jane;;;\r\nFN;DERIVED=TRUE:Jane Doe\r\n")->value;

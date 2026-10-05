@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Fixed
+
+- `VCardDecoder` no longer turns an empty `EMAIL` or `TEL` (`EMAIL;TYPE=HOME:`, written by Nextcloud
+  Contacts) into an address or a number with an empty value: it keeps the property verbatim and reports
+  it, as it does for an empty `ADR` or `NICKNAME`.
+
 ## [0.2.1] - 2026-10-03
 
 ### Fixed
