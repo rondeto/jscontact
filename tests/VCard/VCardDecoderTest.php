@@ -349,6 +349,17 @@ final class VCardDecoderTest extends TestCase
         self::assertSame(['/vCardProps/0: kept EMAIL verbatim: empty value', '/vCardProps/1: kept TEL verbatim: empty value'], array_map(strval(...), $result->issues));
     }
 
+    public function testAParameterNamedByANumberIsKept(): void
+    {
+        // Nextcloud writes the photos of its federated contacts so.
+        $result = $this->decode("FN:Jane Doe\r\nPHOTO;ENCODING=b;TYPE=image/png;0=v2-federated:iVBORw0KGgo=\r\n");
+        $vCard = new VCardEncoder()->encode($result->value)->value;
+
+        self::assertSame([], $result->issues);
+        self::assertCount(1, $result->value->media);
+        self::assertStringContainsString(';0=v2-federated', $vCard);
+    }
+
     public function testADerivedFullNameIsNotKept(): void
     {
         $card = $this->decode("N:Doe;Jane;;;\r\nFN;DERIVED=TRUE:Jane Doe\r\n")->value;

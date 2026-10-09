@@ -527,7 +527,7 @@ final class Exporter
 
     private function name(?Name $name): void
     {
-        $params = null === $name ? [] : $name->vCardParams;
+        $params = $name->vCardParams ?? [];
         $hasComponents = null !== $name && [] !== $name->components;
 
         if ($hasComponents || VCardVersion::V30 === $this->version) {
@@ -1514,7 +1514,7 @@ final class Exporter
         $params = [];
         foreach ($vCardParams as $name => $value) {
             if ('group' !== $name) {
-                $params[strtoupper($name)] = $value;
+                $params[strtoupper((string) $name)] = $value;
             }
         }
 

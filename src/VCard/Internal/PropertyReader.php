@@ -129,7 +129,8 @@ final class PropertyReader
                 continue;
             }
 
-            $unread[strtolower($name)] = 1 === \count($values) ? $values[0] : $values;
+            // A numeric name ("0=v2-federated") is an int key in PHP.
+            $unread[strtolower((string) $name)] = 1 === \count($values) ? $values[0] : $values;
         }
 
         if ([] !== $this->types) {
@@ -230,7 +231,7 @@ final class PropertyReader
         foreach ($this->parameters as $name => $values) {
             $isDecoded = 'VALUE' === $name || ($isQuotedPrintable && \in_array($name, ['ENCODING', 'CHARSET'], true));
             if (!$isDecoded && [] !== $values) {
-                $parameters[strtolower($name)] = 1 === \count($values) ? $values[0] : $values;
+                $parameters[strtolower((string) $name)] = 1 === \count($values) ? $values[0] : $values;
             }
         }
 
