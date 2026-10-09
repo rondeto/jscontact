@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+### Fixed
+
+- `VCardDecoder` and `VCardEncoder` no longer fail with a `TypeError` on a parameter named by a number
+  (`PHOTO;ENCODING=b;TYPE=image/png;0=v2-federated:…`, written by Nextcloud for its federated contacts):
+  PHP makes it an integer key. It is kept as any other unknown parameter.
+
 ## [0.2.2] - 2026-10-05
 
 ### Fixed
