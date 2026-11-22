@@ -523,7 +523,7 @@ final class Importer
 
         $text = trim($property->text());
         $isValid = match ($property->name) {
-            'REV', 'CREATED' => null !== Timestamp::parse($text),
+            'REV', 'CREATED' => Timestamp::parse($text) instanceof \DateTimeImmutable,
             'KIND' => 1 === preg_match('/^[a-z0-9-]+$/i', $text) && 0 !== stripos($text, 'x-'),
             default => '' !== $text,
         };
@@ -733,7 +733,7 @@ final class Importer
     {
         $created = $property->parameter('CREATED');
         $createdAt = null === $created ? null : Timestamp::parse($created);
-        if (null !== $created && null === $createdAt) {
+        if (null !== $created && !$createdAt instanceof \DateTimeImmutable) {
             $this->issues->add('', \sprintf('NOTE: CREATED "%s" is not a timestamp, ignored it', $created));
         }
 
@@ -1071,7 +1071,7 @@ final class Importer
     private function grammaticalGender(PropertyReader $property): void
     {
         $value = strtolower(trim($property->text()));
-        if (null !== $this->grammaticalGender) {
+        if ($this->grammaticalGender instanceof PropertyReader) {
             $this->raw($property, 'more than one GRAMGENDER property');
         } elseif (1 !== preg_match('/^[a-z0-9-]+$/', $value) || str_starts_with($value, 'x-')) {
             $this->raw($property, \sprintf('"%s" is not a valid GRAMGENDER value', $value));
@@ -1088,12 +1088,12 @@ final class Importer
 
     private function speakToAs(): ?SpeakToAs
     {
-        if (null === $this->grammaticalGender && [] === $this->pronouns) {
+        if (!$this->grammaticalGender instanceof PropertyReader && [] === $this->pronouns) {
             return null;
         }
 
         return new SpeakToAs(
-            grammaticalGender: null === $this->grammaticalGender ? null : strtolower(trim($this->grammaticalGender->text())),
+            grammaticalGender: $this->grammaticalGender instanceof PropertyReader ? strtolower(trim($this->grammaticalGender->text())) : null,
             pronouns: $this->pronouns,
             vCardParams: $this->grammaticalGender?->unreadParameters() ?? [],
         );
@@ -1284,7 +1284,7 @@ final class Importer
                 $this->raw($phonetic, 'no N property relates to it by ALTID');
             }
 
-            return null === $full ? null : new Name(full: $full->text(), vCardParams: $full->unreadParameters());
+            return $full instanceof PropertyReader ? new Name(full: $full->text(), vCardParams: $full->unreadParameters()) : null;
         }
 
         $structured = $main->structured($this->rawValue($main));

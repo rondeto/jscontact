@@ -188,7 +188,7 @@ final readonly class Android implements Dialect
      */
     private function writeRow(VCard $vCard, ?Property $replaced, array $row, array $params): void
     {
-        if (null !== $replaced) {
+        if ($replaced instanceof Property) {
             $vCard->remove($replaced);
         }
 

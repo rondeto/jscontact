@@ -31,7 +31,7 @@ final class Dates
             $isUtc = str_ends_with(strtoupper($value), 'Z');
             $utc = $isUtc ? Timestamp::parse($value) : null;
 
-            return null === $utc ? null : new TimestampValue($utc);
+            return $utc instanceof \DateTimeImmutable ? new TimestampValue($utc) : null;
         }
 
         $patterns = [

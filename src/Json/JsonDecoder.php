@@ -120,8 +120,8 @@ final readonly class JsonDecoder
             kind: $object->enum('kind', Registry::CARD_KINDS),
             language: $object->string('language'),
             members: $object->set('members'),
-            name: null === $name ? null : $this->name($name),
-            speakToAs: null === $speakToAs || !$speakToAs->isOfType('SpeakToAs') ? null : new SpeakToAs(
+            name: $name instanceof JsonObject ? $this->name($name) : null,
+            speakToAs: !$speakToAs instanceof JsonObject || !$speakToAs->isOfType('SpeakToAs') ? null : new SpeakToAs(
                 grammaticalGender: $speakToAs->enum('grammaticalGender', Registry::GRAMMATICAL_GENDERS),
                 pronouns: $this->map($speakToAs, 'pronouns', 'Pronouns', $this->pronouns(...)),
                 vCardName: $speakToAs->string('vCardName'),
@@ -138,10 +138,10 @@ final readonly class JsonDecoder
             links: $this->map($object, 'links', 'Link', $this->link(...)),
             notes: $this->map($object, 'notes', 'Note', $this->note(...)),
             anniversaries: $this->map($object, 'anniversaries', 'Anniversary', $this->anniversary(...)),
-            media: $this->map($object, 'media', 'Media', fn (JsonObject $media): ?Media => null === ($r = $this->resource($media, Registry::MEDIA_KINDS)) || null === $r->kind ? null : new Media($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
-            cryptoKeys: $this->map($object, 'cryptoKeys', 'CryptoKey', fn (JsonObject $key): ?CryptoKey => null === ($r = $this->resource($key, null)) ? null : new CryptoKey($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
-            directories: $this->map($object, 'directories', 'Directory', fn (JsonObject $directory): ?Directory => null === ($r = $this->resource($directory, Registry::DIRECTORY_KINDS)) || null === $r->kind ? null : new Directory($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $directory->int('listAs'), $r->vCardName, $r->vCardParams, $r->extra)),
-            calendars: $this->map($object, 'calendars', 'Calendar', fn (JsonObject $calendar): ?Calendar => null === ($r = $this->resource($calendar, Registry::CALENDAR_KINDS)) || null === $r->kind ? null : new Calendar($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
+            media: $this->map($object, 'media', 'Media', fn (JsonObject $media): ?Media => !($r = $this->resource($media, Registry::MEDIA_KINDS)) instanceof ResourceFields || null === $r->kind ? null : new Media($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
+            cryptoKeys: $this->map($object, 'cryptoKeys', 'CryptoKey', fn (JsonObject $key): ?CryptoKey => ($r = $this->resource($key, null)) instanceof ResourceFields ? new CryptoKey($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra) : null),
+            directories: $this->map($object, 'directories', 'Directory', fn (JsonObject $directory): ?Directory => !($r = $this->resource($directory, Registry::DIRECTORY_KINDS)) instanceof ResourceFields || null === $r->kind ? null : new Directory($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $directory->int('listAs'), $r->vCardName, $r->vCardParams, $r->extra)),
+            calendars: $this->map($object, 'calendars', 'Calendar', fn (JsonObject $calendar): ?Calendar => !($r = $this->resource($calendar, Registry::CALENDAR_KINDS)) instanceof ResourceFields || null === $r->kind ? null : new Calendar($r->uri, $r->kind, $r->mediaType, $r->contexts, $r->pref, $r->label, $r->vCardName, $r->vCardParams, $r->extra)),
             schedulingAddresses: $this->map($object, 'schedulingAddresses', 'SchedulingAddress', $this->schedulingAddress(...)),
             preferredLanguages: $this->map($object, 'preferredLanguages', 'LanguagePref', $this->languagePref(...)),
             // Keyed by the uid of the related Card, which need not be an Id.
@@ -366,9 +366,9 @@ final readonly class JsonDecoder
             $object->warn('date', 'missing mandatory property');
         }
 
-        $date = null === $date ? null : $this->date($date);
+        $date = $date instanceof JsonObject ? $this->date($date) : null;
         $place = $object->object('place');
-        $place = null === $place || !$place->isOfType('Address') ? null : $this->address($place);
+        $place = !$place instanceof JsonObject || !$place->isOfType('Address') ? null : $this->address($place);
 
         if (null === $kind || null === $date) {
             return null;
@@ -396,12 +396,12 @@ final readonly class JsonDecoder
                 $object->warn('utc', 'missing mandatory property');
             }
 
-            return null === $utc ? null : new Timestamp(
+            return $utc instanceof \DateTimeImmutable ? new Timestamp(
                 utc: $utc,
                 vCardName: $object->string('vCardName'),
                 vCardParams: $object->vCardParams(),
                 extra: $object->extra(),
-            );
+            ) : null;
         }
 
         if (!$object->isOfType('PartialDate')) {
@@ -536,7 +536,7 @@ final readonly class JsonDecoder
         return new Note(
             note: $note,
             created: $object->dateTime('created'),
-            author: null === $author || !$author->isOfType('Author') ? null : new Author(
+            author: !$author instanceof JsonObject || !$author->isOfType('Author') ? null : new Author(
                 name: $author->string('name'),
                 uri: $author->string('uri'),
                 vCardName: $author->string('vCardName'),
