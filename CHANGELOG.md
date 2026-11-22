@@ -6,12 +6,19 @@ All notable changes to this project are documented in this file. The format foll
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-22
+
 ### Fixed
 
 - `VCardDecoder` no longer keeps in `vCardProps` an `FN` that only differs from the name by its parameters
   (`FN;X-NC-SCOPE=v2-federated:Jane Doe` next to `N;X-NC-SCOPE=v2-federated:Doe;Jane`, written by Nextcloud):
   once the name was edited, that stale `FN` was written back as is and clients kept showing the old name.
   It is derived from the name again, as any `FN` of a card whose name has components.
+
+## [0.2.3] - 2026-10-09
+
+### Fixed
+
 - `VCardDecoder` and `VCardEncoder` no longer fail with a `TypeError` on a parameter named by a number
   (`PHOTO;ENCODING=b;TYPE=image/png;0=v2-federated:…`, written by Nextcloud for its federated contacts):
   PHP makes it an integer key. It is kept as any other unknown parameter.
@@ -94,7 +101,9 @@ First release.
 - Some sabre/vobject behaviors are worked around, see the `sabre/vobject workaround:` comments. The
   workarounds go once sabre/vobject 5 ships the fixes.
 
-[Unreleased]: https://github.com/rondeto/jscontact/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/rondeto/jscontact/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/rondeto/jscontact/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/rondeto/jscontact/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/rondeto/jscontact/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/rondeto/jscontact/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rondeto/jscontact/compare/v0.1.0...v0.2.0
