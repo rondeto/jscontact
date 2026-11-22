@@ -84,13 +84,13 @@ final readonly class JsonEncoder
             'kind' => $card->kind,
             'language' => $card->language,
             'members' => $this->set($card->members),
-            'name' => null === $card->name ? null : $this->name($card->name),
-            'speakToAs' => null === $card->speakToAs ? null : $this->object([
+            'name' => $card->name instanceof Name ? $this->name($card->name) : null,
+            'speakToAs' => $card->speakToAs instanceof \Rondeto\JSContact\Model\SpeakToAs ? $this->object([
                 'grammaticalGender' => $card->speakToAs->grammaticalGender,
                 'pronouns' => $this->map($card->speakToAs->pronouns, $this->pronouns(...)),
                 'vCardName' => $card->speakToAs->vCardName,
                 'vCardParams' => $this->vCardParams($card->speakToAs->vCardParams),
-            ], $card->speakToAs->extra),
+            ], $card->speakToAs->extra) : null,
             'nicknames' => $this->map($card->nicknames, $this->nickname(...)),
             'organizations' => $this->map($card->organizations, $this->organization(...)),
             'titles' => $this->map($card->titles, $this->title(...)),
@@ -310,7 +310,7 @@ final readonly class JsonEncoder
                 // A Timestamp is not the default type of date: its @type is mandatory.
                 ? $this->object(['@type' => 'Timestamp', 'utc' => $this->dateTime($date->utc), 'vCardName' => $date->vCardName, 'vCardParams' => $this->vCardParams($date->vCardParams)], $date->extra)
                 : $this->object(['year' => $date->year, 'month' => $date->month, 'day' => $date->day, 'calendarScale' => $date->calendarScale, 'vCardName' => $date->vCardName, 'vCardParams' => $this->vCardParams($date->vCardParams)], $date->extra),
-            'place' => null === $anniversary->place ? null : $this->address($anniversary->place),
+            'place' => $anniversary->place instanceof Address ? $this->address($anniversary->place) : null,
             'vCardName' => $anniversary->vCardName,
             'vCardParams' => $this->vCardParams($anniversary->vCardParams),
         ], $anniversary->extra);
@@ -339,7 +339,7 @@ final readonly class JsonEncoder
         return $this->object([
             'note' => $note->note,
             'created' => $this->dateTime($note->created),
-            'author' => null === $note->author ? null : $this->author($note->author),
+            'author' => $note->author instanceof Author ? $this->author($note->author) : null,
             'vCardName' => $note->vCardName,
             'vCardParams' => $this->vCardParams($note->vCardParams),
         ], $note->extra);
@@ -426,7 +426,7 @@ final readonly class JsonEncoder
 
     private function dateTime(?\DateTimeImmutable $dateTime): ?string
     {
-        return null === $dateTime ? null : Syntax::formatUtcDateTime($dateTime);
+        return $dateTime instanceof \DateTimeImmutable ? Syntax::formatUtcDateTime($dateTime) : null;
     }
 
     /**

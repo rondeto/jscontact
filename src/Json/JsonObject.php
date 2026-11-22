@@ -147,7 +147,7 @@ final class JsonObject
         }
 
         $dateTime = Syntax::parseDateTime($value);
-        if (null === $dateTime) {
+        if (!$dateTime instanceof \DateTimeImmutable) {
             $this->warn($name, \sprintf('"%s" is not a date-time, ignored the value', $value));
         } elseif (!Syntax::isUtcDateTime($value)) {
             $this->warn($name, \sprintf('read "%s" as "%s"', $value, Syntax::formatUtcDateTime($dateTime)));
@@ -396,7 +396,7 @@ final class JsonObject
         $properties = [];
         foreach ($value as $index => $item) {
             $property = $this->jCardProperty($item);
-            if (null === $property) {
+            if (!$property instanceof VCardProperty) {
                 $this->warn('vCardProps/'.$index, 'not a jCard property, ignored the entry');
             } else {
                 $properties[] = $property;

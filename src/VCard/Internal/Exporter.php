@@ -118,8 +118,8 @@ final class Exporter
         $this->single('PRODID', $card->prodId, '/prodId');
         $this->single('KIND', $card->kind, '/kind');
         $this->single('LANGUAGE', $card->language, '/language');
-        $this->single('CREATED', null === $card->created ? null : Timestamp::format($card->created), '/created');
-        $this->single('REV', null === $card->updated ? null : Timestamp::format($card->updated), '/updated');
+        $this->single('CREATED', $card->created instanceof \DateTimeImmutable ? Timestamp::format($card->created) : null, '/created');
+        $this->single('REV', $card->updated instanceof \DateTimeImmutable ? Timestamp::format($card->updated) : null, '/updated');
 
         $this->name($card->name);
 
@@ -202,7 +202,7 @@ final class Exporter
     private function localizations(Card $card): array
     {
         $phonetic = [];
-        if (null !== $card->name && (null !== $card->name->phoneticSystem || null !== $card->name->phoneticScript)) {
+        if ($card->name instanceof Name && (null !== $card->name->phoneticSystem || null !== $card->name->phoneticScript)) {
             $phonetic['/name'] = true;
         }
 
@@ -528,7 +528,7 @@ final class Exporter
     private function name(?Name $name): void
     {
         $params = $name->vCardParams ?? [];
-        $hasComponents = null !== $name && [] !== $name->components;
+        $hasComponents = $name instanceof Name && [] !== $name->components;
 
         if ($hasComponents || VCardVersion::V30 === $this->version) {
             $this->n($name, $params);
@@ -584,11 +584,11 @@ final class Exporter
 
         $params = $this->parameters($vCardParams);
         $group = \is_string($vCardParams['group'] ?? null) ? $vCardParams['group'] : null;
-        if (null !== $name && $name->isOrdered && [] !== $name->components) {
+        if ($name instanceof Name && $name->isOrdered && [] !== $name->components) {
             $params['JSCOMPS'] = Components::jsComps($name->defaultSeparator, array_values($positions));
         }
 
-        if (null !== $name && [] !== $name->sortAs) {
+        if ($name instanceof Name && [] !== $name->sortAs) {
             $sortAs = [];
             foreach (Components::NAME_KINDS as $index => $kind) {
                 $sortAs[$index] = $name->sortAs[$kind] ?? '';
@@ -600,7 +600,7 @@ final class Exporter
         $this->add('N', $this->structured($components), $params, $group, '/name');
 
         // The phonetic N shares the ALTID of the N, see add().
-        if (null !== $name && (null !== $name->phoneticSystem || null !== $name->phoneticScript)) {
+        if ($name instanceof Name && (null !== $name->phoneticSystem || null !== $name->phoneticScript)) {
             $phoneticParams = ['PHONETIC' => $name->phoneticSystem ?? 'script'];
             if (null !== $name->phoneticScript) {
                 $phoneticParams['SCRIPT'] = $name->phoneticScript;
@@ -1043,7 +1043,7 @@ final class Exporter
     private function speakToAs(Card $card): void
     {
         $speakToAs = $card->speakToAs;
-        if (null === $speakToAs) {
+        if (!$speakToAs instanceof \Rondeto\JSContact\Model\SpeakToAs) {
             return;
         }
 
@@ -1216,7 +1216,7 @@ final class Exporter
     private function note(string $key, Note $note): void
     {
         $params = [];
-        if (null !== $note->created) {
+        if ($note->created instanceof \DateTimeImmutable) {
             $params['CREATED'] = Timestamp::format($note->created);
         }
 
@@ -1378,7 +1378,7 @@ final class Exporter
                     $this->jsProp($map.'/'.$this->escape((string) $key).'/'.$this->escape((string) $name), $value);
                 }
 
-                if ($entry instanceof Note && null !== $entry->author) {
+                if ($entry instanceof Note && $entry->author instanceof \Rondeto\JSContact\Model\Author) {
                     foreach ($entry->author->extra as $name => $value) {
                         $this->jsProp('notes/'.$this->escape((string) $key).'/author/'.$this->escape((string) $name), $value);
                     }
@@ -1400,7 +1400,7 @@ final class Exporter
             }
         }
 
-        if (null !== $card->name) {
+        if ($card->name instanceof Name) {
             foreach ($card->name->extra as $name => $value) {
                 $this->jsProp('name/'.$this->escape((string) $name), $value);
             }
