@@ -368,6 +368,25 @@ final class VCardDecoderTest extends TestCase
         self::assertSame([], $card->vCardProps);
     }
 
+    public function testAFullNameThatIsTheNameDerivedFromNIsNotKeptEvenWithParameters(): void
+    {
+        $card = $this->decode("N;X-NC-SCOPE=v2-federated:Doe;Jane;;;\r\nFN;X-NC-SCOPE=v2-federated:Jane Doe\r\n")->value;
+        self::assertNotNull($card->name);
+        $card->name->components[0]->value = 'Smith';
+
+        self::assertNull($card->name->full);
+        self::assertSame([], $card->vCardProps);
+        self::assertStringContainsString("FN;DERIVED=TRUE:Jane Smith\r\n", new VCardEncoder()->encode($card)->value);
+    }
+
+    public function testAFullNameThatIsNotTheNameDerivedFromNIsKeptWithItsParameters(): void
+    {
+        $card = $this->decode("N:Doe;Jane;;;\r\nFN;X-NC-SCOPE=v2-federated:Dr. Jane Doe\r\n")->value;
+
+        self::assertCount(1, $card->vCardProps);
+        self::assertSame('fn', $card->vCardProps[0]->name);
+    }
+
     public function testAnInvalidPatchIsKeptVerbatim(): void
     {
         $result = $this->decode("JSPROP;JSPTR=\"emails/e1/x\":1\r\n");

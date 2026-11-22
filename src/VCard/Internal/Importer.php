@@ -1278,8 +1278,8 @@ final class Importer
             $main = null;
         }
 
-        $full = $this->fullName(null !== $main);
         if (null === $main) {
+            $full = $this->fullName(false);
             foreach ($this->phonetics as $phonetic) {
                 $this->raw($phonetic, 'no N property relates to it by ALTID');
             }
@@ -1292,6 +1292,7 @@ final class Importer
         [$components, $isOrdered, $defaultSeparator] = $this->ordered($main, $values, $structured, Components::NAME_KINDS, '/name');
         $sortAs = $this->sortAs($main, $values);
         [$phonetics, $phoneticSystem, $phoneticScript] = $this->phonetic($main, $components);
+        $full = $this->fullName(true, Components::fullName(array_map(static fn (array $component): NameComponent => new NameComponent($component['kind'], $component['value']), $components), $isOrdered, $defaultSeparator), $main->unreadParameters());
 
         return new Name(
             components: array_map(
@@ -1312,8 +1313,11 @@ final class Importer
     /**
      * Picks the FN property that converts to the full name (RFC 9555, section 2.5.2): the
      * one without LANGUAGE that has the least parameters. Others are kept verbatim.
+     *
+     * @param string|null                        $derived    The full name the N property gives, when there is one
+     * @param array<string, string|list<string>> $nameParams The parameters N keeps
      */
-    private function fullName(bool $hasName): ?PropertyReader
+    private function fullName(bool $hasName, ?string $derived = null, array $nameParams = []): ?PropertyReader
     {
         $candidates = $this->fullNames;
         usort($candidates, static fn (PropertyReader $a, PropertyReader $b): int => [$a->has('LANGUAGE'), \count($a->property->parameters())] <=> [$b->has('LANGUAGE'), \count($b->property->parameters())]);
@@ -1328,6 +1332,14 @@ final class Importer
             $isDerived = 'true' === strtolower($candidate->parameter('DERIVED') ?? '');
             if (null === $chosen && $isDerived && $hasName && [] === $candidate->unreadParameters()) {
                 continue; // Derived from N: it is derived again when converting back.
+            }
+
+            // Kept verbatim for its parameters only, yet the same as the N property gives, with
+            // nothing more than its parameters: it would go stale as soon as the name changes,
+            // so it is derived again when converting back.
+            $unread = $candidate->unreadParameters();
+            if (null === $chosen && $hasName && null !== $derived && [] !== $unread && $candidate->text() === $derived && [] === array_filter($unread, static fn (string|array $value, string $name): bool => ($nameParams[$name] ?? null) !== $value, \ARRAY_FILTER_USE_BOTH)) {
+                continue;
             }
 
             // When there is an N property, the Name's vCardParams hold its parameters.
