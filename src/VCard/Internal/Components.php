@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rondeto\JSContact\VCard\Internal;
 
+use Rondeto\JSContact\Model\NameComponent;
+
 /**
  * Maps the components of N and ADR structured values to Name and Address components
  * (RFC 9555, sections 2.5.5, 2.6.1 and 3.3.1; RFC 9554, sections 2.1 and 2.2).
@@ -86,6 +88,38 @@ final class Components
         }
 
         return $values;
+    }
+
+    /**
+     * A full name from name components, for the FN property (RFC 9555, section 3.1).
+     *
+     * @param list<NameComponent> $components
+     */
+    public static function fullName(array $components, bool $isOrdered, ?string $defaultSeparator): string
+    {
+        if (!$isOrdered) {
+            // Western order, the most common one.
+            $order = array_flip(['title', 'given', 'given2', 'surname', 'surname2', 'generation', 'credential']);
+            usort($components, static fn ($a, $b): int => ($order[$a->kind] ?? 99) <=> ($order[$b->kind] ?? 99));
+        }
+
+        $full = '';
+        $separator = null;
+        foreach ($components as $component) {
+            if ('separator' === $component->kind) {
+                $separator = ($separator ?? '').$component->value;
+                continue;
+            }
+
+            if ('' !== $full) {
+                $full .= $separator ?? $defaultSeparator ?? ' ';
+            }
+
+            $full .= $component->value;
+            $separator = null;
+        }
+
+        return $full;
     }
 
     /**

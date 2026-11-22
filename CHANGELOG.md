@@ -8,6 +8,10 @@ All notable changes to this project are documented in this file. The format foll
 
 ### Fixed
 
+- `VCardDecoder` no longer keeps in `vCardProps` an `FN` that only differs from the name by its parameters
+  (`FN;X-NC-SCOPE=v2-federated:Jane Doe` next to `N;X-NC-SCOPE=v2-federated:Doe;Jane`, written by Nextcloud):
+  once the name was edited, that stale `FN` was written back as is and clients kept showing the old name.
+  It is derived from the name again, as any `FN` of a card whose name has components.
 - `VCardDecoder` and `VCardEncoder` no longer fail with a `TypeError` on a parameter named by a number
   (`PHOTO;ENCODING=b;TYPE=image/png;0=v2-federated:…`, written by Nextcloud for its federated contacts):
   PHP makes it an integer key. It is kept as any other unknown parameter.

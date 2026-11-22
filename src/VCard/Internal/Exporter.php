@@ -544,7 +544,7 @@ final class Exporter
             $this->add('FN', $name->full, $this->parameters($params), $group, '/name/full');
         } elseif ($hasComponents) {
             // RFC 9555, section 3.1: derive the full name and say so.
-            $this->add('FN', $this->fullName($name), ['DERIVED' => 'TRUE', ...$this->parameters($params)], $group, '/name/full');
+            $this->add('FN', Components::fullName($name->components, $name->isOrdered, $name->defaultSeparator), ['DERIVED' => 'TRUE', ...$this->parameters($params)], $group, '/name/full');
         } else {
             $this->add('FN', '', $this->parameters($params), $group, '/name/full');
         }
@@ -1582,37 +1582,6 @@ final class Exporter
         }
 
         return $components;
-    }
-
-    /**
-     * A full name from name components, for the FN property (RFC 9555, section 3.1).
-     */
-    private function fullName(Name $name): string
-    {
-        $components = $name->components;
-        if (!$name->isOrdered) {
-            // Western order, the most common one.
-            $order = array_flip(['title', 'given', 'given2', 'surname', 'surname2', 'generation', 'credential']);
-            usort($components, static fn ($a, $b): int => ($order[$a->kind] ?? 99) <=> ($order[$b->kind] ?? 99));
-        }
-
-        $full = '';
-        $separator = null;
-        foreach ($components as $component) {
-            if ('separator' === $component->kind) {
-                $separator = ($separator ?? '').$component->value;
-                continue;
-            }
-
-            if ('' !== $full) {
-                $full .= $separator ?? $name->defaultSeparator ?? ' ';
-            }
-
-            $full .= $component->value;
-            $separator = null;
-        }
-
-        return $full;
     }
 
     /**
